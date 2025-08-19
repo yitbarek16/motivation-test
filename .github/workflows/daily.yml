@@ -1,0 +1,74 @@
+name: daily-motivation
+
+on:
+  schedule:
+    # 06:00 UTC ≈ 09:00 EAT (Mon–Fri)
+    - cron: "*/3 * * * *"
+  workflow_dispatch:
+    inputs:
+      run_immediately:
+        description: "Run motivation_runner.py now"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Recreate runner_config.json from secret (base64)
+        env:
+          SESSION_ID: ${{ secrets.SESSION_ID }}
+        run: |
+          if [ -z "$SESSION_ID" ]; then
+            echo "SESSION_ID secret is missing" >&2
+            exit 1
+          fi
+          if [ ! -f runner_public.json ]; then
+            echo "runner_public.json is missing from the repo" >&2
+            exit 1
+          fi
+          python -c "import json, os; pub=json.load(open('runner_public.json','r', encoding='utf-8')); cfg={'session_id': os.environ['SESSION_ID'], 'account_id': int(pub['account_id']), 'project_id': int(pub['project_id']), 'message_board_id': int(pub['message_board_id']), 'cc_ids': pub.get('cc_ids', [])}; open('runner_config.json','w', encoding='utf-8').write(json.dumps(cfg)); print('runner_config.json built from runner_public.json + SESSION_ID')"
+
+      - name: Recreate access token json from secret (base64)
+        env:
+          SESSION_ID: ${{ secrets.SESSION_ID }}
+          ACCESS_TOKEN_JSON_B64: ${{ secrets.ACCESS_TOKEN_JSON_B64 }}
+        run: |
+          if [ -z "$SESSION_ID" ] || [ -z "$ACCESS_TOKEN_JSON_B64" ]; then
+            echo "SESSION_ID or ACCESS_TOKEN_JSON_B64 secret is missing" >&2
+            exit 1
+          fi
+          echo "$ACCESS_TOKEN_JSON_B64" | base64 -d > access_token_${SESSION_ID}.json
+          echo "access_token_${SESSION_ID}.json restored"
+
+      - name: Provide OpenRouter API key (if used)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ]; then
+            echo "OPENROUTER_API_KEY present"
+          else
+            echo "OPENROUTER_API_KEY not set; proceeding without it"
+          fi
+
+      - name: Run motivation_runner.py
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          python motivation_runner.py
+
+
