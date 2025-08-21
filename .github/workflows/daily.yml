@@ -1,9 +1,9 @@
-name: daily-motivation
+name: daily
 
 on:
   schedule:
     # 06:00 UTC ≈ 09:00 EAT (Mon–Fri)
-    - cron: "*/3 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       run_immediately:
