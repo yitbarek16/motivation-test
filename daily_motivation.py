@@ -359,7 +359,9 @@ def upload_image_to_basecamp(account_id: int, access_token: str, image_path: str
                 logging.error(f"Failed to clean up temporary image {image_path}: {e}")
 
 def build_mentions(project_people: Optional[List[Dict]]) -> str:
+    logging.debug(f"build_mentions called with {len(project_people or [])} people")
     if not project_people:
+        logging.debug("No project people, returning 'Selam Team,'")
         return "Selam Team,"
 
     # Stable order by casefolded name; dedupe strictly by sgid
@@ -439,6 +441,8 @@ def post_message(
 
         logging.debug(f"Main mentions: {mentions}")
         logging.debug(f"CC people: {[p['name'] for p in (cc_people or [])]}")
+        logging.debug(f"CC people count: {len(cc_people or [])}")
+        logging.debug(f"CC people details: {json.dumps(cc_people or [], indent=2) if cc_people else 'None'}")
 
         # Start HTML content
         content = ""
@@ -459,10 +463,17 @@ def post_message(
         content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
 
         # Add CCs below footer (exclude Selam)
+        logging.debug(f"Processing CC people: {len(cc_people or [])}")
         if cc_people:
             cc_mentions_html = build_mentions(cc_people)
+            logging.debug(f"CC mentions HTML: {cc_mentions_html}")
             if cc_mentions_html.strip():
                 content += f'<div style="margin-top:10px;"><strong>Cc:</strong> {cc_mentions_html}</div>'
+                logging.debug("CC mentions added to content")
+            else:
+                logging.debug("CC mentions HTML is empty, not adding")
+        else:
+            logging.debug("No CC people provided")
 
         # Deduplicate mentions
         content = deduplicate_mentions_html(content)
@@ -593,15 +604,21 @@ def get_quote():
     "Accountability", "Strategic Focus", "Continuous Growth", "Adaptability",       
     "Curiosity & Innovation", "Discipline", "Growth", "Resilience", "Teamwork",
             ]
+    # Randomly select 2-3 themes for variety
+    import random
+    selected_themes = random.sample(themes, min(3, len(themes)))
+    themes_str = ", ".join(selected_themes)
+    
     prompt = f"""
-    Give me one short motivational quote about {themes}.
+    Give me one short motivational quote about {themes_str}.
     It should be original, creatively phrased, and not a famous or widely circulated quote.
     Avoid quotes by Steve Jobs, Einstein, or other well-known figures.
     Include the author's name after the quote, separated by a dash. If unknown, use 'Anonymous' separated by a dash.
     Do not include introductions, or explanations.
 
     Today's date is {datetime.now(EAT_TZ).strftime('%A, %B %d')}. Make the quote feel fresh and relevant to this day.
-    change the quote every day to keep it unique and engaging.
+    The quote should be completely different from any previous quotes. Make it unique and engaging.
+    Consider the current time ({datetime.now(EAT_TZ).strftime('%H:%M')}) and day of week for inspiration.
     Example format: "The only way to do great work is to love what you do" — Steve Jobs
     """
 

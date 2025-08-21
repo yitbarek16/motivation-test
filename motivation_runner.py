@@ -42,8 +42,13 @@ def split_people_by_cc(
     if not all_people:
         return [], []
     cc_id_str = {str(pid) for pid in (cc_ids or [])}
+    logging.info(f"CC IDs from config: {cc_ids}")
+    logging.info(f"CC IDs as strings: {cc_id_str}")
+    logging.info(f"All people IDs: {[p.get('id') for p in all_people]}")
     cc_people = [p for p in all_people if str(p.get("id")) in cc_id_str]
     main_people = [p for p in all_people if str(p.get("id")) not in cc_id_str]
+    logging.info(f"Split result - Main people: {len(main_people)}, CC people: {len(cc_people)}")
+    logging.info(f"CC people names: {[p.get('name') for p in cc_people]}")
     return main_people, cc_people
 
 
