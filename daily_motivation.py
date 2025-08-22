@@ -40,6 +40,10 @@ USER_AGENT = "DailyMotivationApp/1.0"
 #ZENQUOTES_API_URL = "https://zenquotes.io/api/quotes"
 EAT_TZ = pytz.timezone("Africa/Nairobi")  # EAT is UTC+3
 
+# Quoteable.io API configuration
+QUOTABLE_API_URL = "https://api.quotable.io/random"
+
+
 
 # Initialize logging
 try:
@@ -359,6 +363,10 @@ def upload_image_to_basecamp(account_id: int, access_token: str, image_path: str
                 logging.error(f"Failed to clean up temporary image {image_path}: {e}")
 
 def build_mentions(project_people: Optional[List[Dict]]) -> str:
+    """
+    Build mentions for a list of people, ensuring proper formatting and deduplication.
+    Returns formatted mentions string ready for HTML insertion.
+    """
     logging.debug(f"build_mentions called with {len(project_people or [])} people")
     if not project_people:
         logging.debug("No project people, returning 'Selam Team,'")
@@ -377,7 +385,10 @@ def build_mentions(project_people: Optional[List[Dict]]) -> str:
             tags.append(tag)
             seen_sgids.add(sgid)
 
-    return f"{' '.join(tags)}," if tags else "Selam Team,"
+    if tags:
+        return f"{' '.join(tags)},"
+    else:
+        return "Selam Team,"
 
 def deduplicate_mentions_html(html: str) -> str:
     """
@@ -418,8 +429,9 @@ def post_message(
     enhanced: Optional[str] = None
 ) -> bool:
     """
-    Post a message to a Basecamp message board with deduplicated mentions.
-    Debug-friendly: logs everything.
+    Post a message to a Basecamp message board with proper mention structure:
+    - Main mentions: All people before the post (excluding CCs)
+    - CC mentions: After the footer, below the main content
     """
     logging.debug("Attempting to post message to Basecamp")
 
@@ -433,21 +445,23 @@ def post_message(
     url = f"{BASE_URL}/{account_id}/buckets/{project_id}/message_boards/{message_board_id}/messages.json"
 
     try:
-        # Build main mentions if not provided
+        # Build main mentions if not provided (exclude CC people)
         if not mentions and project_people:
-            mentions = build_mentions(project_people)
+            # Filter out CC people from main mentions
+            cc_ids = {str(p["id"]) for p in (cc_people or [])}
+            main_people = [p for p in project_people if str(p["id"]) not in cc_ids]
+            mentions = build_mentions(main_people)
         elif not mentions:
-            mentions = ""
+            mentions = "Selam Team,"
 
-        logging.debug(f"Main mentions: {mentions}")
-        logging.debug(f"CC people: {[p['name'] for p in (cc_people or [])]}")
+        logging.debug(f"Main mentions (before post): {mentions}")
         logging.debug(f"CC people count: {len(cc_people or [])}")
         logging.debug(f"CC people details: {json.dumps(cc_people or [], indent=2) if cc_people else 'None'}")
 
-        # Start HTML content
+        # Start HTML content with main mentions
         content = ""
         if mentions.strip():
-            content += f"<p>Selam {mentions}</p>"
+            content += f"<p>{mentions}</p>"
 
         # Embed image
         if image_sgid:
@@ -462,14 +476,13 @@ def post_message(
         # Footer
         content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
 
-        # Add CCs below footer (exclude Selam)
-        logging.debug(f"Processing CC people: {len(cc_people or [])}")
+        # Add CCs below footer (separate section)
         if cc_people:
             cc_mentions_html = build_mentions(cc_people)
             logging.debug(f"CC mentions HTML: {cc_mentions_html}")
             if cc_mentions_html.strip():
-                content += f'<div style="margin-top:10px;"><strong>Cc:</strong> {cc_mentions_html}</div>'
-                logging.debug("CC mentions added to content")
+                content += f'<div style="margin-top:15px; padding-top:10px; border-top:1px solid #e0e0e0;"><strong>Cc:</strong> {cc_mentions_html}</div>'
+                logging.debug("CC mentions added to content below footer")
             else:
                 logging.debug("CC mentions HTML is empty, not adding")
         else:
@@ -521,21 +534,24 @@ def schedule_daily_post(
 
         logging.info(f"Running scheduled post at {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Main people = project_people - cc_people
-        cc_ids = {str(p["id"]) for p in (cc_people or [])}
-        if project_people:
-            main_people = [p for p in project_people if str(p["id"]) not in cc_ids]
-        else:
-            main_people = get_project_people(account_id, project_id, access_token)
-            main_people = [p for p in main_people if str(p["id"]) not in cc_ids]
+        # Get all project people if not provided
+        if not project_people:
+            project_people = get_project_people(account_id, project_id, access_token)
 
-        # Clean CCs (exclude "Selam")
+        # Separate main people from CC people
+        cc_ids = {str(p["id"]) for p in (cc_people or [])}
+        main_people = [p for p in project_people if str(p["id"]) not in cc_ids]
+        
+        logging.info(f"Main people for mentions: {len(main_people)}")
+        logging.info(f"CC people: {len(cc_people or [])}")
+
+        # Clean CCs (exclude "Selam" and ensure they're valid)
         filtered_cc_people = [
             p for p in (cc_people or [])
-            if p.get("name", "").strip().lower() != "selam"
+            if p.get("name", "").strip().lower() != "selam" and p.get("sgid")
         ]
 
-        # Get quote and enhanced version
+        # Get quote from Quoteable.io and enhance with AI model
         quote, author = get_quote()
         enhanced = enhance_quote(quote, author)
 
@@ -553,7 +569,7 @@ def schedule_daily_post(
             image_path=output_image
         )
 
-        # ✅ Use the same format as test_post (post_message handles layout)
+        # Post message with proper mention structure
         success = post_message(
             account_id=account_id,
             project_id=project_id,
@@ -562,8 +578,8 @@ def schedule_daily_post(
             quote=quote,
             author=author,
             test_mode=test_mode,
-            project_people=main_people,       # mentions above
-            cc_people=filtered_cc_people,     # CCs below footer
+            project_people=main_people,       # Main mentions above the post
+            cc_people=filtered_cc_people,     # CC mentions below footer
             enhanced=enhanced,
             image_url=None,
             image_sgid=attachable_sgid
@@ -595,57 +611,91 @@ def schedule_daily_post(
 
 
 
+def get_fallback_quote():
+    """
+    Provides fallback motivational quotes when Quoteable.io API fails.
+    Returns a tuple of (quote, author).
+    """
+    fallback_quotes = [
+        ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill"),
+        ("The only way to do great work is to love what you do.", "Steve Jobs"),
+        ("Don't watch the clock; do what it does. Keep going.", "Sam Levenson"),
+        ("The future depends on what you do today.", "Mahatma Gandhi"),
+        ("It always seems impossible until it's done.", "Nelson Mandela"),
+        ("Quality is not an act, it is a habit.", "Aristotle"),
+        ("The only limit to our realization of tomorrow is our doubts of today.", "Franklin D. Roosevelt"),
+        ("Excellence is not a skill. It's an attitude.", "Ralph Marston"),
+        ("Your work is going to fill a large part of your life, and the only way to be truly satisfied is to do what you believe is great work.", "Steve Jobs"),
+        ("The best way to predict the future is to create it.", "Peter Drucker")
+    ]
+    
+    import random
+    return random.choice(fallback_quotes)
+
 def get_quote():
     """
-    Generates a motivational quote with an author using the Mistral LLM.
-    Falls back to 'Anonymous' if no clear author is provided.
+    Fetches a motivational quote from Quoteable.io API with work-related themes.
+    Falls back to predefined quotes if API fails.
     """
-    themes = [
-    "Accountability", "Strategic Focus", "Continuous Growth", "Adaptability",       
-    "Curiosity & Innovation", "Discipline", "Growth", "Resilience", "Teamwork",
-            ]
-    # Randomly select 2-3 themes for variety
-    import random
-    selected_themes = random.sample(themes, min(3, len(themes)))
-    themes_str = ", ".join(selected_themes)
+    # Work-related motivational tags
+    work_themes = [
+        "leadership", "success", "wisdom", "development", "resilience", 
+        "intelligence", "motivation", "inspiration", "work", "business",
+        "professional", "achievement", "growth", "excellence", "dedication"
+    ]
     
-    prompt = f"""
-    Give me one short motivational quote about {themes_str}.
-    It should be original, creatively phrased, and not a famous or widely circulated quote.
-    Avoid quotes by Steve Jobs, Einstein, or other well-known figures.
-    Include the author's name after the quote, separated by a dash. If unknown, use 'Anonymous' separated by a dash.
-    Do not include introductions, or explanations.
-
-    Today's date is {datetime.now(EAT_TZ).strftime('%A, %B %d')}. Make the quote feel fresh and relevant to this day.
-    The quote should be completely different from any previous quotes. Make it unique and engaging.
-    Consider the current time ({datetime.now(EAT_TZ).strftime('%H:%M')}) and day of week for inspiration.
-    Example format: "The only way to do great work is to love what you do" — Steve Jobs
-    """
-
+    # Randomly select 3-4 themes for variety
+    import random
+    selected_themes = random.sample(work_themes, min(4, len(work_themes)))
+    themes_str = "|".join(selected_themes)
+    
     try:
-        completion = client.chat.completions.create(
-            model="mistralai/mistral-small-3.2-24b-instruct:free",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+        # Build API URL with parameters
+        params = {
+            "tags": themes_str,
+            "maxLength": 150,  # Keep quotes concise
+            "minLength": 20    # Ensure meaningful quotes
+        }
+        
+        # Add API key if available
+        headers = {"User-Agent": USER_AGENT}
+        if QUOTABLE_API_URL:
+            headers["Authorization"] = f"Bearer {QUOTABLE_API_URL}"
+        
+        # Make API request
+        response = requests.get(
+            QUOTABLE_API_URL, 
+            params=params, 
+            headers=headers, 
+            timeout=REQUEST_TIMEOUT
         )
-        response = completion.choices[0].message.content.strip()
-
-        # Split quote and author
-        if "—" in response:
-            quote, author = map(str.strip, response.split("—", 1))
-            # Fallback if author is missing or generic
-            if not author or author.lower() in ["unknown", "anonymous"]:
+        
+        if response.status_code == 200:
+            data = response.json()
+            quote = data.get("content", "").strip()
+            author = data.get("author", "").strip()
+            
+            # Validate quote
+            if not quote:
+                logging.warning("Empty quote received from Quoteable.io")
+                return get_fallback_quote()
+                
+            # Clean up author name
+            if not author or author.lower() in ["unknown", "anonymous", "unknown author"]:
                 author = "Anonymous"
+            
+            logging.info(f"Quote fetched from Quoteable.io: '{quote}' — {author}")
+            return quote, author
+            
         else:
-            quote = response
-            author = "Anonymous"
-
-        return quote, author
-
+            logging.error(f"Quoteable.io API error: {response.status_code} - {response.text}")
+            logging.info("Falling back to predefined quotes")
+            return get_fallback_quote()
+            
     except Exception as e:
-        print(f"[ERROR] Failed to generate quote: {e}")
-        return None, None
+        logging.error(f"Failed to fetch quote from Quoteable.io: {e}")
+        logging.info("Falling back to predefined quotes")
+        return get_fallback_quote()
 
 # OpenRouter client
 client = OpenAI(
