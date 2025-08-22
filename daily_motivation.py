@@ -42,7 +42,7 @@ EAT_TZ = pytz.timezone("Africa/Nairobi")  # EAT is UTC+3
 
 # Quoteable.io API configuration
 QUOTABLE_API_URL = "https://api.quotable.io/random"
-
+QUOTABLE_API_KEY = os.getenv("QUOTABLE_API_KEY")  # Optional API key for higher rate limits
 
 
 # Initialize logging
@@ -369,8 +369,8 @@ def build_mentions(project_people: Optional[List[Dict]]) -> str:
     """
     logging.debug(f"build_mentions called with {len(project_people or [])} people")
     if not project_people:
-        logging.debug("No project people, returning 'Selam Team,'")
-        return "Selam Team,"
+        logging.debug("No project people, returning 'Team'")
+        return "Team"
 
     # Stable order by casefolded name; dedupe strictly by sgid
     seen_sgids = set()
@@ -386,9 +386,9 @@ def build_mentions(project_people: Optional[List[Dict]]) -> str:
             seen_sgids.add(sgid)
 
     if tags:
-        return f"{' '.join(tags)},"
+        return f"{' '.join(tags)}"
     else:
-        return "Selam Team,"
+        return "Team"
 
 def deduplicate_mentions_html(html: str) -> str:
     """
@@ -452,7 +452,7 @@ def post_message(
             main_people = [p for p in project_people if str(p["id"]) not in cc_ids]
             mentions = build_mentions(main_people)
         elif not mentions:
-            mentions = "Selam Team,"
+            mentions = "Team"
 
         logging.debug(f"Main mentions (before post): {mentions}")
         logging.debug(f"CC people count: {len(cc_people or [])}")
@@ -461,7 +461,8 @@ def post_message(
         # Start HTML content with main mentions
         content = ""
         if mentions.strip():
-            content += f"<p>{mentions}</p>"
+            # Format: "Selam x,y,z"
+            content += f"<p>Selam {mentions}</p>"
 
         # Embed image
         if image_sgid:
@@ -474,13 +475,14 @@ def post_message(
             content += f"<p>{enhanced}</p>"
 
         # Footer
-        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
+        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a great day!</strong></div>'
 
         # Add CCs below footer (separate section)
         if cc_people:
             cc_mentions_html = build_mentions(cc_people)
             logging.debug(f"CC mentions HTML: {cc_mentions_html}")
             if cc_mentions_html.strip():
+                # Format: "Cc: a,b,c"
                 content += f'<div style="margin-top:15px; padding-top:10px; border-top:1px solid #e0e0e0;"><strong>Cc:</strong> {cc_mentions_html}</div>'
                 logging.debug("CC mentions added to content below footer")
             else:
@@ -513,6 +515,48 @@ def post_message(
     except Exception as e:
         logging.error(f"Error posting message: {str(e)}\n{traceback.format_exc()}")
         return False
+
+def cleanup_old_img1():
+    """
+    Clean up the old hardcoded img1.png file that was being reused.
+    """
+    try:
+        old_img_path = "static/img1.png"
+        if os.path.exists(old_img_path):
+            os.remove(old_img_path)
+            logging.info("Cleaned up old hardcoded img1.png file")
+    except Exception as e:
+        logging.warning(f"Failed to remove old img1.png: {e}")
+
+def cleanup_old_quote_images(max_files: int = 10):
+    """
+    Clean up old quote images to prevent the static folder from filling up.
+    Keeps the most recent max_files images.
+    """
+    try:
+        import glob
+        import os
+        
+        # Find all quote images
+        quote_pattern = "static/quote_*.png"
+        quote_files = glob.glob(quote_pattern)
+        
+        if len(quote_files) <= max_files:
+            return
+            
+        # Sort by modification time (newest first)
+        quote_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        
+        # Remove old files
+        for old_file in quote_files[max_files:]:
+            try:
+                os.remove(old_file)
+                logging.info(f"Cleaned up old quote image: {old_file}")
+            except Exception as e:
+                logging.warning(f"Failed to remove old quote image {old_file}: {e}")
+                
+    except Exception as e:
+        logging.error(f"Error during quote image cleanup: {e}")
 
 def schedule_daily_post(
     account_id: int,
@@ -555,11 +599,19 @@ def schedule_daily_post(
         quote, author = get_quote()
         enhanced = enhance_quote(quote, author)
 
-        # Generate image locally
+        # Generate image locally with unique filename
         base_image = "static/1.png"
-        output_filename = "img1.png"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Create a simple hash from quote for uniqueness
+        import hashlib
+        quote_hash = hashlib.md5(f"{quote}{author}".encode()).hexdigest()[:8]
+        output_filename = f"quote_{timestamp}_{quote_hash}.png"
         output_image = f"static/{output_filename}"
+        
+        # Generate the quote image
         quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
+        
+        logging.info(f"Generated unique quote image: {output_filename}")
 
         # Upload image to Basecamp
         from daily_motivation import upload_image_to_basecamp
@@ -587,6 +639,8 @@ def schedule_daily_post(
 
         if success:
             logging.info("Scheduled message posted successfully")
+            cleanup_old_img1()  # Clean up old hardcoded file
+            cleanup_old_quote_images() # Call cleanup after successful post
         else:
             logging.error("Scheduled message failed to post")
 
@@ -659,8 +713,8 @@ def get_quote():
         
         # Add API key if available
         headers = {"User-Agent": USER_AGENT}
-        if QUOTABLE_API_URL:
-            headers["Authorization"] = f"Bearer {QUOTABLE_API_URL}"
+        if QUOTABLE_API_KEY:
+            headers["Authorization"] = f"Bearer {QUOTABLE_API_KEY}"
         
         # Make API request
         response = requests.get(
