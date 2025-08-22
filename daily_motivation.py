@@ -11,6 +11,7 @@ import schedule
 import pytz
 import urllib.parse
 import webbrowser
+from PIL import ImageFont
 
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, List
@@ -712,10 +713,10 @@ def quote_overlay_on_image(image_path, quote, output_path):
         draw = ImageDraw.Draw(img)
         width, height = img.size
 
-        # Font settings
+        # Use system font (always available on GitHub runners)
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         max_font_size = int(height * 0.08)
         min_font_size = int(height * 0.03)
-        font_path = "times.ttf"  # Adjust path if needed
 
         # Split quote and author
         if "—" in quote:
@@ -730,8 +731,7 @@ def quote_overlay_on_image(image_path, quote, output_path):
         while font_size >= min_font_size:
             quote_font = ImageFont.truetype(font_path, font_size)
             max_chars_per_line = int(width / (font_size * 0.7))
-            quoted_text = f'{quote_text.strip()}'
-            wrapped_quote = textwrap.fill(quoted_text, width=max_chars_per_line)
+            wrapped_quote = textwrap.fill(quote_text.strip(), width=max_chars_per_line)
             quote_bbox = draw.multiline_textbbox((0, 0), wrapped_quote, font=quote_font, spacing=6)
             quote_width = quote_bbox[2] - quote_bbox[0]
             quote_height = quote_bbox[3] - quote_bbox[1]
@@ -740,45 +740,38 @@ def quote_overlay_on_image(image_path, quote, output_path):
                 break
             font_size -= 2
 
-        # Author font (smaller)
+        # Author font
         author_font_size = int(font_size * 0.6)
         author_font = ImageFont.truetype(font_path, author_font_size)
         author_bbox = draw.textbbox((0, 0), author_text, font=author_font)
         author_width = author_bbox[2] - author_bbox[0]
         author_height = author_bbox[3] - author_bbox[1]
 
-        # Total height
+        # Center positions
         total_height = quote_height + author_height + 20
-
-        # Center position
         x_quote = (width - quote_width) / 2
         y_quote = (height - total_height) / 2
         x_author = (width - author_width) / 2
         y_author = y_quote + quote_height + 20
 
-        # Colors
-        color1 = (25, 25, 112)  # quote
-        color2 = (30, 40, 70)   # author
-
         # Draw text
-        draw.multiline_text((x_quote, y_quote), wrapped_quote, font=quote_font, fill=color1, align="center", spacing=6)
-        draw.text((x_author, y_author), author_text, font=author_font, fill=color2)
+        draw.multiline_text((x_quote, y_quote), wrapped_quote, font=quote_font, fill=(25, 25, 112), align="center", spacing=6)
+        draw.text((x_author, y_author), author_text, font=author_font, fill=(30, 40, 70))
 
-        # Resize for mobile (max width 1080px)
+        # Resize for mobile
         max_width = 1080
         if width > max_width:
             scale = max_width / width
             new_size = (int(width * scale), int(height * scale))
             img = img.resize(new_size, Image.ANTIALIAS)
 
-        # Convert to RGB to avoid transparency issues
+        # Save as PNG (overwrite)
         img = img.convert("RGB")
-
-        # Save as PNG
         img.save(output_path, format="PNG")
         return output_path
 
     except Exception as e:
         print(f"[ERROR] Failed to generate image: {e}")
         return None
+
 
