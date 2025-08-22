@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 import os
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -81,7 +82,8 @@ def post_once(config: Dict) -> int:
 
     # Generate image
     base_image = "static/1.png"
-    output_image = "static/img1.png"
+    unique_id = uuid.uuid4().hex[:8]
+    output_image = f"static/img_{unique_id}.png"
     try:
         quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
     except Exception as e:
