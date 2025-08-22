@@ -516,48 +516,6 @@ def post_message(
         logging.error(f"Error posting message: {str(e)}\n{traceback.format_exc()}")
         return False
 
-def cleanup_old_img1():
-    """
-    Clean up the old hardcoded img1.png file that was being reused.
-    """
-    try:
-        old_img_path = "static/img1.png"
-        if os.path.exists(old_img_path):
-            os.remove(old_img_path)
-            logging.info("Cleaned up old hardcoded img1.png file")
-    except Exception as e:
-        logging.warning(f"Failed to remove old img1.png: {e}")
-
-def cleanup_old_quote_images(max_files: int = 10):
-    """
-    Clean up old quote images to prevent the static folder from filling up.
-    Keeps the most recent max_files images.
-    """
-    try:
-        import glob
-        import os
-        
-        # Find all quote images
-        quote_pattern = "static/quote_*.png"
-        quote_files = glob.glob(quote_pattern)
-        
-        if len(quote_files) <= max_files:
-            return
-            
-        # Sort by modification time (newest first)
-        quote_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-        
-        # Remove old files
-        for old_file in quote_files[max_files:]:
-            try:
-                os.remove(old_file)
-                logging.info(f"Cleaned up old quote image: {old_file}")
-            except Exception as e:
-                logging.warning(f"Failed to remove old quote image {old_file}: {e}")
-                
-    except Exception as e:
-        logging.error(f"Error during quote image cleanup: {e}")
-
 def schedule_daily_post(
     account_id: int,
     project_id: int,
@@ -599,19 +557,14 @@ def schedule_daily_post(
         quote, author = get_quote()
         enhanced = enhance_quote(quote, author)
 
-        # Generate image locally with unique filename
+        # Generate image locally - overlay new quote on existing img1.png
         base_image = "static/1.png"
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Create a simple hash from quote for uniqueness
-        import hashlib
-        quote_hash = hashlib.md5(f"{quote}{author}".encode()).hexdigest()[:8]
-        output_filename = f"quote_{timestamp}_{quote_hash}.png"
-        output_image = f"static/{output_filename}"
+        output_image = "static/img1.png"  # Always use img1.png as output
         
-        # Generate the quote image
+        # Generate the quote image (overlays new quote on img1.png)
         quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
         
-        logging.info(f"Generated unique quote image: {output_filename}")
+        logging.info(f"Generated quote overlay on img1.png: '{quote}' — {author}")
 
         # Upload image to Basecamp
         from daily_motivation import upload_image_to_basecamp
@@ -639,8 +592,7 @@ def schedule_daily_post(
 
         if success:
             logging.info("Scheduled message posted successfully")
-            cleanup_old_img1()  # Clean up old hardcoded file
-            cleanup_old_quote_images() # Call cleanup after successful post
+            # No cleanup needed - we're using single img1.png file
         else:
             logging.error("Scheduled message failed to post")
 
