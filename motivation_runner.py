@@ -1,8 +1,9 @@
 import json
 import logging
-import uuid
 import os
 import sys
+import random
+import glob
 from typing import Dict, List, Optional, Tuple
 
 from daily_motivation import (
@@ -16,7 +17,6 @@ from daily_motivation import (
     post_comment,
     build_mentions
 )
-
 
 DEFAULT_CONFIG_PATH = "runner_config.json"
 
@@ -32,7 +32,7 @@ def read_config(config_path: str = DEFAULT_CONFIG_PATH) -> Dict:
     if not os.path.exists(config_path):
         raise FileNotFoundError(
             f"Config file not found: {config_path}. Create it with required fields: "
-            "session_id, account_id, project_id, message_board_id, schedule_time (optional), cc_ids (optional)."
+            "session_id, account_id, project_id, message_board_id, (optional: parent_message_id, cc_ids)."
         )
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -50,10 +50,6 @@ def split_people_by_cc(
     return main_people, cc_people
 
 
-# ...
-import random
-import glob
-
 def post_once(config: Dict) -> int:
     required = ["session_id", "account_id", "project_id", "message_board_id"]
     for key in required:
@@ -65,28 +61,28 @@ def post_once(config: Dict) -> int:
     account_id: int = int(config["account_id"])
     project_id: int = int(config["project_id"])
     message_board_id: int = int(config["message_board_id"])
-    message_id = config.get("message_id")   # ✅ if provided, we post as a comment
+    parent_message_id = config.get("parent_message_id")  # ✅ for thread mode
     cc_ids: List[int] = list(config.get("cc_ids", []))
 
-    # 🔑 Load access token
     token_data = load_access_token(session_id)
     if not token_data:
-        logging.error("No valid access token found. Authenticate once and copy the token JSON.")
+        logging.error("No valid access token found. Authenticate once on a machine with a browser and copy the token JSON to this server.")
         return 3
+
     access_token: str = token_data["access_token"]
 
-    # 👥 Resolve mentions
+    # Resolve people for mentions
     all_people = get_project_people(account_id, project_id, access_token)
     main_people, cc_people = split_people_by_cc(all_people, cc_ids)
 
-    # 📝 Get quote
+    # Build content
     quote, author = get_quote()
     if not quote:
         logging.error("Failed to generate quote")
         return 4
     enhanced = enhance_quote(quote, author)
 
-    # 🎨 Pick random background (only .png), fallback to static/1.png
+    # 🎨 Pick random background
     candidates = glob.glob("static/*.png")
     base_image = random.choice(candidates) if candidates else "static/1.png"
     if not os.path.exists(base_image):
@@ -99,7 +95,6 @@ def post_once(config: Dict) -> int:
         logging.error(f"Failed to generate image: {e}")
         return 5
 
-    # ⬆️ Upload image
     attachable_sgid = upload_image_to_basecamp(
         account_id=account_id,
         access_token=access_token,
@@ -109,28 +104,19 @@ def post_once(config: Dict) -> int:
         logging.error("Image upload failed; aborting post")
         return 6
 
-    # ✅ Build daily content block
-    main_mentions = f"Selam {build_mentions(main_people)}" if main_people else ""
-    cc_mentions_html = f"<div><strong>Cc:</strong> <span>{build_mentions(cc_people)}</span></div>" if cc_people else ""
-
-    content = ""
-    if main_mentions:
-        content += f"<p>{main_mentions}</p>"
-    content += f'<p><bc-attachment sgid="{attachable_sgid}"></bc-attachment></p>'
-    if enhanced:
-        content += f"<p>{enhanced}</p>"
-    content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
-    if cc_mentions_html:
-        content += cc_mentions_html
-
-    # ✨ Post either as comment OR new message
-    if message_id:
+    # ✅ Threaded comment vs new message
+    if parent_message_id:
         ok = post_comment(
             account_id=account_id,
             project_id=project_id,
-            message_id=int(message_id),
+            parent_message_id=int(parent_message_id),
             access_token=access_token,
-            content=content
+            image_sgid=attachable_sgid,
+            quote=quote,
+            author=author,
+            project_people=main_people,
+            cc_people=cc_people,
+            enhanced=enhanced,
         )
     else:
         ok = post_message(
@@ -150,19 +136,15 @@ def post_once(config: Dict) -> int:
         )
 
     if ok:
-        logging.info("✅ Post succeeded")
+        logging.info("Post succeeded")
         return 0
     else:
-        logging.error("❌ Post failed")
+        logging.error("Post failed")
         return 7
-
 
 
 def main() -> int:
     configure_logging()
-
-    # Simple CLI: default action is to post once using runner_config.json
-    # Optional: allow custom config path via first argument
     config_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG_PATH
     try:
         cfg = read_config(config_path)
@@ -175,5 +157,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

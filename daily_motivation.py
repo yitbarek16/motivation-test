@@ -418,14 +418,21 @@ def deduplicate_mentions_html(html: str) -> str:
 def post_comment(
     account_id: int,
     project_id: int,
-    message_id: int,
+    parent_message_id: int,  # The dedicated thread’s message ID
     access_token: str,
-    content: str
+    image_url: Optional[str] = None,
+    image_sgid: Optional[str] = None,
+    quote: Optional[str] = None,
+    author: Optional[str] = None,
+    project_people: Optional[List[Dict]] = None,
+    cc_people: Optional[List[Dict]] = None,
+    enhanced: Optional[str] = None
 ) -> bool:
     """
-    Post a comment under an existing Basecamp message.
+    Post a daily inspiration as a comment under an existing Basecamp message.
     """
-    logging.debug("Attempting to post comment to Basecamp")
+
+    logging.debug("Attempting to post COMMENT to Basecamp")
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -434,16 +441,51 @@ def post_comment(
         "Content-Type": "application/json; charset=utf-8"
     }
 
-    url = f"{BASE_URL}/{account_id}/buckets/{project_id}/messages/{message_id}/comments.json"
-    payload = {"content": content}
+    url = f"{BASE_URL}/{account_id}/buckets/{project_id}/recordings/{parent_message_id}/comments.json"
 
     try:
+        # Build main mentions
+        main_mentions = ""
+        if project_people:
+            main_mentions = f"Selam {build_mentions(project_people)}"
+
+        # Build CC mentions
+        cc_mentions_html = ""
+        if cc_people:
+            cc_mentions_html = f"<p><strong>Cc:</strong> {build_mentions(cc_people)}</p>"
+
+        # Content body
+        content = ""
+        if main_mentions:
+            content += f"<p>{main_mentions}</p>"
+
+        if image_sgid:
+            content += f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>'
+        elif image_url:
+            content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
+
+        if enhanced:
+            content += f"<p>{enhanced}</p>"
+
+        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
+
+        if cc_mentions_html:
+            content += cc_mentions_html
+
+        # Deduplicate mentions
+        content = deduplicate_mentions_html(content)
+
+        payload = {"content": content}
+
         response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+
         if response.ok:
-            logging.info("✅ Comment posted successfully")
+            logging.info("Comment posted successfully")
             return True
-        logging.error(f"❌ Failed to post comment: {response.status_code} - {response.text[:300]}")
+
+        logging.error(f"Failed to post comment: {response.status_code} - {response.text[:300]}")
         return False
+
     except Exception as e:
         logging.error(f"Error posting comment: {str(e)}\n{traceback.format_exc()}")
         return False
