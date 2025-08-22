@@ -455,10 +455,11 @@ def post_message(
 
         # --- Build CC mentions ---
         cc_mentions_html = ""
+        cc_mentions_html = ""
         if cc_people:
-            cc_html = build_mentions(cc_people)
+            cc_html = build_mentions(cc_people)   # space-joined mentions
             if cc_html.strip():
-                cc_mentions_html = f"<p><strong>Cc:</strong> {cc_html}</p>"
+                cc_mentions_html = f"<div><strong>Cc:</strong> <span>{cc_html}</span></div>"
 
         # --- Compose content ---
         content = ""
@@ -722,7 +723,7 @@ def quote_overlay_on_image(image_path, quote, output_path):
         # Split quote and author
         if "—" in quote:
             quote_text, author_text = quote.rsplit("—", 1)
-            quote_text = f"“{quote.strip()}”"
+            quote_text = f"“{quote_text.strip()}”"   # quotation only around the quote
             author_text = f"— {author_text.strip()}"
         else:
             quote_text = quote
