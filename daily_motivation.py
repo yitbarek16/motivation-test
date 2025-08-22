@@ -714,16 +714,19 @@ def quote_overlay_on_image(image_path, quote, output_path):
         width, height = img.size
 
         # Use system font (always available on GitHub runners)
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
+
         max_font_size = int(height * 0.08)
         min_font_size = int(height * 0.03)
 
         # Split quote and author
         if "—" in quote:
             quote_text, author_text = quote.rsplit("—", 1)
+            quote_text = f"“{quote.strip()}”"
             author_text = f"— {author_text.strip()}"
         else:
             quote_text = quote
+            quote_text = f"“{quote.strip()}”"
             author_text = ""
 
         # Fit quote text

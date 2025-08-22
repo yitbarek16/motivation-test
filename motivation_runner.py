@@ -82,8 +82,7 @@ def post_once(config: Dict) -> int:
 
     # Generate image
     base_image = "static/1.png"
-    unique_id = uuid.uuid4().hex[:8]
-    output_image = f"static/img_{unique_id}.png"
+    output_image = f"static/img1.png"
     try:
         quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
     except Exception as e:
