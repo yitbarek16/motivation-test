@@ -11,7 +11,7 @@ import schedule
 import pytz
 import urllib.parse
 import webbrowser
-
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, List
 from dotenv import load_dotenv
@@ -603,13 +603,12 @@ def schedule_daily_post(
         schedule.run_pending()
         time.sleep(60)
 
-
+QUOTABLE_API_URL = "https://zenquotes.io/api/quotes/random"
+QUOTABLE_API_KEY = None  # Add your API key if you have one
+USER_AGENT = "MotivationFetcher/1.0"
+REQUEST_TIMEOUT = 5  # seconds
 
 def get_fallback_quote():
-    """
-    Provides fallback motivational quotes when Quoteable.io API fails.
-    Returns a tuple of (quote, author).
-    """
     fallback_quotes = [
         ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill"),
         ("The only way to do great work is to love what you do.", "Steve Jobs"),
@@ -622,73 +621,30 @@ def get_fallback_quote():
         ("Your work is going to fill a large part of your life, and the only way to be truly satisfied is to do what you believe is great work.", "Steve Jobs"),
         ("The best way to predict the future is to create it.", "Peter Drucker")
     ]
-    
-    import random
     return random.choice(fallback_quotes)
 
 def get_quote():
-    """
-    Fetches a motivational quote from Quoteable.io API with work-related themes.
-    Falls back to predefined quotes if API fails.
-    """
-    # Work-related motivational tags
-    work_themes = [
-        "leadership", "success", "wisdom", "development", "resilience", 
-        "intelligence", "motivation", "inspiration", "work", "business",
-        "professional", "achievement", "growth", "excellence", "dedication"
-    ]
-    
-    # Randomly select 3-4 themes for variety
-    import random
-    selected_themes = random.sample(work_themes, min(4, len(work_themes)))
-    themes_str = "|".join(selected_themes)
-    
     try:
-        # Build API URL with parameters
-        params = {
-            "tags": themes_str,
-            "maxLength": 150,  # Keep quotes concise
-            "minLength": 20    # Ensure meaningful quotes
-        }
-        
-        # Add API key if available
-        headers = {"User-Agent": USER_AGENT}
-        if QUOTABLE_API_KEY:
-            headers["Authorization"] = f"Bearer {QUOTABLE_API_KEY}"
-        
-        # Make API request
-        response = requests.get(
-            QUOTABLE_API_URL, 
-            params=params, 
-            headers=headers, 
-            timeout=REQUEST_TIMEOUT
-        )
-        
+        response = requests.get("https://zenquotes.io/api/random", timeout=5)
         if response.status_code == 200:
             data = response.json()
-            quote = data.get("content", "").strip()
-            author = data.get("author", "").strip()
-            
-            # Validate quote
+            quote = data[0].get("q", "").strip()
+            author = data[0].get("a", "").strip()
+
             if not quote:
-                logging.warning("Empty quote received from Quoteable.io")
+                logging.warning("Empty quote received from ZenQuotes")
                 return get_fallback_quote()
-                
-            # Clean up author name
-            if not author or author.lower() in ["unknown", "anonymous", "unknown author"]:
+
+            if not author or author.lower() in ["unknown", "anonymous"]:
                 author = "Anonymous"
-            
-            logging.info(f"Quote fetched from Quoteable.io: '{quote}' — {author}")
+
+            logging.info(f"Quote fetched from ZenQuotes: '{quote}' — {author}")
             return quote, author
-            
         else:
-            logging.error(f"Quoteable.io API error: {response.status_code} - {response.text}")
-            logging.info("Falling back to predefined quotes")
+            logging.error(f"ZenQuotes API error: {response.status_code} - {response.text}")
             return get_fallback_quote()
-            
     except Exception as e:
-        logging.error(f"Failed to fetch quote from Quoteable.io: {e}")
-        logging.info("Falling back to predefined quotes")
+        logging.error(f"Failed to fetch quote from ZenQuotes: {e}")
         return get_fallback_quote()
 
 # OpenRouter client
