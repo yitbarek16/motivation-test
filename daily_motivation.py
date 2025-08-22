@@ -11,7 +11,7 @@ import schedule
 import pytz
 import urllib.parse
 import webbrowser
-import random
+
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, List
 from dotenv import load_dotenv
@@ -420,22 +420,18 @@ def post_message(
     access_token: str,
     image_url: Optional[str] = None,
     image_sgid: Optional[str] = None,
-    mentions: Optional[str] = None,          # ignored if project_people provided
+    mentions: Optional[str] = None,
     quote: Optional[str] = None,
     author: Optional[str] = None,
     test_mode: bool = False,
-    project_people: Optional[List[Dict]] = None,  # main mentions
-    cc_people: Optional[List[Dict]] = None,       # cc mentions
+    project_people: Optional[List[Dict]] = None,
+    cc_people: Optional[List[Dict]] = None,
     enhanced: Optional[str] = None
 ) -> bool:
     """
-    Post a message to Basecamp with:
-      - Top:   'Selam {main_mentions}'
-      - Image: embedded via <bc-attachment sgid="...">
-      - Body:  enhanced text
-      - Footer: 'Have a productive day!'
-      - Bottom: 'Cc: {cc_mentions}'
-    Mentions are created with build_mentions(...) and deduplicated.
+    Post a message to a Basecamp message board with correct Basecamp mention formatting:
+      - Main mentions at the top: "Selam <bc-entity ...>, <bc-entity ...>"
+      - CC list at the bottom: "Cc: <bc-entity ...>, <bc-entity ...>"
     """
     logging.debug("Attempting to post message to Basecamp")
 
@@ -449,59 +445,48 @@ def post_message(
     url = f"{BASE_URL}/{account_id}/buckets/{project_id}/message_boards/{message_board_id}/messages.json"
 
     try:
-        # Build main mentions using your helper (preferred over plain names)
-        main_mentions_html = ""
+        # --- Build main mentions ---
+        main_mentions = ""
         if project_people:
-            main_mentions_html = build_mentions(project_people)
-        elif mentions:
-            main_mentions_html = mentions
-        else:
-            main_mentions_html = ""
+            mention_html = build_mentions(project_people)  # ✅ use Basecamp mention tags
+            if mention_html.strip():
+                main_mentions = f"Selam {mention_html}"
 
-        # Build CC mentions using your helper
+        # --- Build CC mentions ---
         cc_mentions_html = ""
         if cc_people:
-            # optional: filter out any accidental "Selam" pseudo-person
-            filtered = [p for p in cc_people if p.get("name","").strip().lower() != "selam"]
-            cc_mentions_html = build_mentions(filtered) if filtered else ""
+            cc_html = build_mentions(cc_people)
+            if cc_html.strip():
+                cc_mentions_html = f"<p><strong>Cc:</strong> {cc_html}</p>"
 
-        # --- Compose content in the exact required order ---
-        content_parts = []
+        # --- Compose content ---
+        content = ""
+        if main_mentions:
+            content += f"<p>{main_mentions}</p>"
 
-        # Top greeting + mentions
-        if main_mentions_html.strip():
-            content_parts.append(f"<p>Selam {main_mentions_html}</p>")
-
-        # Image (prefer sgid embedding)
         if image_sgid:
-            content_parts.append(f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>')
+            content += f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>'
         elif image_url:
-            # Only if you truly have a public URL; otherwise skip
-            content_parts.append(f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>')
+            content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
 
-        # Enhanced message body
         if enhanced:
-            content_parts.append(f"<p>{enhanced}</p>")
+            content += f"<p>{enhanced}</p>"
 
-        # Footer
-        content_parts.append('<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>')
+        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
 
-        # Cc section at the very bottom
-        if cc_mentions_html.strip():
-            content_parts.append(f'<div style="margin-top:10px;"><strong>Cc:</strong> {cc_mentions_html}</div>')
+        if cc_mentions_html:
+            content += cc_mentions_html
 
-        content = "".join(content_parts)
-
-        # Deduplicate any repeated mention tokens
+        # --- Deduplicate mentions ---
         content = deduplicate_mentions_html(content)
 
-        # Log final content for debugging
+        # Debug
         logging.debug("----- POST CONTENT TO BASECAMP -----")
         logging.debug(content)
         logging.debug("----- END POST CONTENT -----")
 
         payload = {
-            "subject": f"Daily Inspiration — {datetime.utcnow().strftime('%Y-%m-%d')}",
+            "subject": "Daily Inspiration",
             "content": content,
             "status": "active"
         }
@@ -512,12 +497,13 @@ def post_message(
             logging.info("Message posted successfully")
             return True
 
-        logging.error(f"Failed to post message: {response.status_code} - {response.text[:500]}")
+        logging.error(f"Failed to post message: {response.status_code} - {response.text[:300]}")
         return False
 
     except Exception as e:
         logging.error(f"Error posting message: {str(e)}\n{traceback.format_exc()}")
         return False
+
 
 def schedule_daily_post(
     account_id: int,
@@ -618,23 +604,16 @@ def schedule_daily_post(
         schedule.run_pending()
         time.sleep(60)
 
+
+
 QUOTABLE_API_URL = "https://zenquotes.io/api/quotes/random"
 QUOTABLE_API_KEY = None  # Add your API key if you have one
 USER_AGENT = "MotivationFetcher/1.0"
 REQUEST_TIMEOUT = 5  # seconds
-
+import random
 def get_fallback_quote():
     fallback_quotes = [
-        ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill"),
-        ("The only way to do great work is to love what you do.", "Steve Jobs"),
-        ("Don't watch the clock; do what it does. Keep going.", "Sam Levenson"),
-        ("The future depends on what you do today.", "Mahatma Gandhi"),
-        ("It always seems impossible until it's done.", "Nelson Mandela"),
-        ("Quality is not an act, it is a habit.", "Aristotle"),
-        ("The only limit to our realization of tomorrow is our doubts of today.", "Franklin D. Roosevelt"),
-        ("Excellence is not a skill. It's an attitude.", "Ralph Marston"),
-        ("Your work is going to fill a large part of your life, and the only way to be truly satisfied is to do what you believe is great work.", "Steve Jobs"),
-        ("The best way to predict the future is to create it.", "Peter Drucker")
+        ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill")
     ]
     return random.choice(fallback_quotes)
 
@@ -661,6 +640,36 @@ def get_quote():
     except Exception as e:
         logging.error(f"Failed to fetch quote from ZenQuotes: {e}")
         return get_fallback_quote()
+
+# OpenRouter client
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+)
+
+def enhance_quote(quote, author):
+    """
+    Expands on the given quote with a short, uplifting message that inspires action and hope.
+    """
+    prompt = f"""Here's a motivational quote:
+"{quote} — {author}"
+
+Now expand on it with a short, uplifting message that inspires action and hope. 
+Do not repeat the original quote. Do not use quotation marks at the beginning or end.
+Feel free to add emojis (except heart emojis).
+Only return the enhanced message. Do not include any introductions, explanations, or closing remarks.
+"""
+    try:
+        completion = client.chat.completions.create(
+            model="mistralai/mistral-small-3.2-24b-instruct:free",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[ERROR] Failed to enhance quote: {e}")
+        return None
 
 # OpenRouter client
 client = OpenAI(
