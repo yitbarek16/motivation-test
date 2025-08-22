@@ -420,18 +420,22 @@ def post_message(
     access_token: str,
     image_url: Optional[str] = None,
     image_sgid: Optional[str] = None,
-    mentions: Optional[str] = None,
+    mentions: Optional[str] = None,          # ignored if project_people provided
     quote: Optional[str] = None,
     author: Optional[str] = None,
     test_mode: bool = False,
-    project_people: Optional[List[Dict]] = None,
-    cc_people: Optional[List[Dict]] = None,
+    project_people: Optional[List[Dict]] = None,  # main mentions
+    cc_people: Optional[List[Dict]] = None,       # cc mentions
     enhanced: Optional[str] = None
 ) -> bool:
     """
-    Post a message to a Basecamp message board with correct mention formatting:
-    - Main mentions at the top with "Selam ..."
-    - CC list at the bottom as "Cc: ..."
+    Post a message to Basecamp with:
+      - Top:   'Selam {main_mentions}'
+      - Image: embedded via <bc-attachment sgid="...">
+      - Body:  enhanced text
+      - Footer: 'Have a productive day!'
+      - Bottom: 'Cc: {cc_mentions}'
+    Mentions are created with build_mentions(...) and deduplicated.
     """
     logging.debug("Attempting to post message to Basecamp")
 
@@ -445,48 +449,59 @@ def post_message(
     url = f"{BASE_URL}/{account_id}/buckets/{project_id}/message_boards/{message_board_id}/messages.json"
 
     try:
-        # Build main mentions (with greeting)
-        main_mentions = ""
+        # Build main mentions using your helper (preferred over plain names)
+        main_mentions_html = ""
         if project_people:
-            names = ", ".join(p["name"] for p in project_people)
-            main_mentions = f"Selam {names},"
+            main_mentions_html = build_mentions(project_people)
+        elif mentions:
+            main_mentions_html = mentions
+        else:
+            main_mentions_html = ""
 
-        # Build CC mentions
-        cc_mentions = ""
+        # Build CC mentions using your helper
+        cc_mentions_html = ""
         if cc_people:
-            cc_names = ", ".join(p["name"] for p in cc_people)
-            cc_mentions = f"<p><strong>Cc:</strong> {cc_names}</p>"
+            # optional: filter out any accidental "Selam" pseudo-person
+            filtered = [p for p in cc_people if p.get("name","").strip().lower() != "selam"]
+            cc_mentions_html = build_mentions(filtered) if filtered else ""
 
-        # Construct HTML content
-        content = f"<p>{main_mentions}</p>"
+        # --- Compose content in the exact required order ---
+        content_parts = []
 
-        # Embed image
+        # Top greeting + mentions
+        if main_mentions_html.strip():
+            content_parts.append(f"<p>Selam {main_mentions_html}</p>")
+
+        # Image (prefer sgid embedding)
         if image_sgid:
-            content += f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>'
+            content_parts.append(f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>')
         elif image_url:
-            content += f'<p><img src="{image_url}" alt="Motivational Quote"></p>'
+            # Only if you truly have a public URL; otherwise skip
+            content_parts.append(f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>')
 
-        # Enhanced message
+        # Enhanced message body
         if enhanced:
-            content += f"<p>{enhanced}</p>"
+            content_parts.append(f"<p>{enhanced}</p>")
 
-        # Closing message
-        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
+        # Footer
+        content_parts.append('<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>')
 
-        # Add CCs at the bottom
-        if cc_mentions:
-            content += cc_mentions
+        # Cc section at the very bottom
+        if cc_mentions_html.strip():
+            content_parts.append(f'<div style="margin-top:10px;"><strong>Cc:</strong> {cc_mentions_html}</div>')
 
-        # Deduplicate mentions globally
+        content = "".join(content_parts)
+
+        # Deduplicate any repeated mention tokens
         content = deduplicate_mentions_html(content)
 
-        # Debug output
+        # Log final content for debugging
         logging.debug("----- POST CONTENT TO BASECAMP -----")
         logging.debug(content)
         logging.debug("----- END POST CONTENT -----")
 
         payload = {
-            "subject": "Daily Inspiration",
+            "subject": f"Daily Inspiration — {datetime.utcnow().strftime('%Y-%m-%d')}",
             "content": content,
             "status": "active"
         }
@@ -497,7 +512,7 @@ def post_message(
             logging.info("Message posted successfully")
             return True
 
-        logging.error(f"Failed to post message: {response.status_code} - {response.text[:200]}")
+        logging.error(f"Failed to post message: {response.status_code} - {response.text[:500]}")
         return False
 
     except Exception as e:
