@@ -424,14 +424,14 @@ def post_message(
     quote: Optional[str] = None,
     author: Optional[str] = None,
     test_mode: bool = False,
-    project_people: Optional[List[Dict]] = None,   # Main mention list
-    cc_people: Optional[List[Dict]] = None,        # CC recipients
+    project_people: Optional[List[Dict]] = None,
+    cc_people: Optional[List[Dict]] = None,
     enhanced: Optional[str] = None
 ) -> bool:
     """
-    Post a message to a Basecamp message board with proper mention structure:
-    - Main mentions: All people before the post (excluding CCs)
-    - CC mentions: After the footer, below the main content
+    Post a message to a Basecamp message board with correct mention formatting:
+    - Main mentions at the top with "Selam ..."
+    - CC list at the bottom as "Cc: ..."
     """
     logging.debug("Attempting to post message to Basecamp")
 
@@ -445,54 +445,42 @@ def post_message(
     url = f"{BASE_URL}/{account_id}/buckets/{project_id}/message_boards/{message_board_id}/messages.json"
 
     try:
-        # Build main mentions if not provided (exclude CC people)
-        if not mentions and project_people:
-            # Filter out CC people from main mentions
-            cc_ids = {str(p["id"]) for p in (cc_people or [])}
-            main_people = [p for p in project_people if str(p["id"]) not in cc_ids]
-            mentions = build_mentions(main_people)
-        elif not mentions:
-            mentions = "Team"
+        # Build main mentions (with greeting)
+        main_mentions = ""
+        if project_people:
+            names = ", ".join(p["name"] for p in project_people)
+            main_mentions = f"Selam {names},"
 
-        logging.debug(f"Main mentions (before post): {mentions}")
-        logging.debug(f"CC people count: {len(cc_people or [])}")
-        logging.debug(f"CC people details: {json.dumps(cc_people or [], indent=2) if cc_people else 'None'}")
+        # Build CC mentions
+        cc_mentions = ""
+        if cc_people:
+            cc_names = ", ".join(p["name"] for p in cc_people)
+            cc_mentions = f"<p><strong>Cc:</strong> {cc_names}</p>"
 
-        # Start HTML content with main mentions
-        content = ""
-        if mentions.strip():
-            # Format: "Selam x,y,z"
-            content += f"<p>Selam {mentions}</p>"
+        # Construct HTML content
+        content = f"<p>{main_mentions}</p>"
 
         # Embed image
         if image_sgid:
             content += f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>'
         elif image_url:
-            content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
+            content += f'<p><img src="{image_url}" alt="Motivational Quote"></p>'
 
         # Enhanced message
         if enhanced:
             content += f"<p>{enhanced}</p>"
 
-        # Footer
-        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a great day!</strong></div>'
+        # Closing message
+        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
 
-        # Add CCs below footer (separate section)
-        if cc_people:
-            cc_mentions_html = build_mentions(cc_people)
-            logging.debug(f"CC mentions HTML: {cc_mentions_html}")
-            if cc_mentions_html.strip():
-                # Format: "Cc: a,b,c"
-                content += f'<div style="margin-top:15px; padding-top:10px; border-top:1px solid #e0e0e0;"><strong>Cc:</strong> {cc_mentions_html}</div>'
-                logging.debug("CC mentions added to content below footer")
-            else:
-                logging.debug("CC mentions HTML is empty, not adding")
-        else:
-            logging.debug("No CC people provided")
+        # Add CCs at the bottom
+        if cc_mentions:
+            content += cc_mentions
 
-        # Deduplicate mentions
+        # Deduplicate mentions globally
         content = deduplicate_mentions_html(content)
 
+        # Debug output
         logging.debug("----- POST CONTENT TO BASECAMP -----")
         logging.debug(content)
         logging.debug("----- END POST CONTENT -----")
@@ -509,7 +497,7 @@ def post_message(
             logging.info("Message posted successfully")
             return True
 
-        logging.error(f"Failed to post message: {response.status_code}\n{response.text}")
+        logging.error(f"Failed to post message: {response.status_code} - {response.text[:200]}")
         return False
 
     except Exception as e:
