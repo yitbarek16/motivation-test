@@ -715,7 +715,7 @@ def quote_overlay_on_image(image_path, quote, output_path):
         width, height = img.size
 
         # Use system font (always available on GitHub runners)
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
+        font_path = "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"
 
         max_font_size = int(height * 0.08)
         min_font_size = int(height * 0.03)
@@ -759,7 +759,7 @@ def quote_overlay_on_image(image_path, quote, output_path):
         y_author = y_quote + quote_height + 20
 
         # Draw text
-        draw.multiline_text((x_quote, y_quote), wrapped_quote, font=quote_font, fill=(25, 25, 112), align="center", spacing=6)
+        draw.multiline_text((x_quote, y_quote), wrapped_quote, font=quote_font, fill=(0, 0, 0), align="center", spacing=6)
         draw.text((x_author, y_author), author_text, font=author_font, fill=(30, 40, 70))
 
         # Resize for mobile

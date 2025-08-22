@@ -49,6 +49,9 @@ def split_people_by_cc(
 
 
 # ...
+import random
+import glob
+
 def post_once(config: Dict) -> int:
     required = ["session_id", "account_id", "project_id", "message_board_id"]
     for key in required:
@@ -80,9 +83,14 @@ def post_once(config: Dict) -> int:
         return 4
     enhanced = enhance_quote(quote, author)
 
-    # Generate image
-    base_image = "static/1.png"
-    output_image = f"static/img1.png"
+    # 🎨 Pick random background (only .png), fallback to static/1.png
+    candidates = glob.glob("static/*.png")
+    base_image = random.choice(candidates) if candidates else "static/1.png"
+    if not os.path.exists(base_image):
+        base_image = "static/1.png"  # final safety fallback
+
+    # Always overwrite same file (no storage waste)
+    output_image = "output/img1.png"
     try:
         quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
     except Exception as e:
@@ -99,7 +107,6 @@ def post_once(config: Dict) -> int:
         logging.error("Image upload failed; aborting post")
         return 6
 
-    # ✅ Post message with same pattern as app.py
     ok = post_message(
         account_id=account_id,
         project_id=project_id,
@@ -107,13 +114,13 @@ def post_once(config: Dict) -> int:
         access_token=access_token,
         quote=quote,
         author=author,
-        project_people=main_people,   # main mentions
-        cc_people=cc_people,          # cc mentions
-        mentions=None,                # keep explicit
+        project_people=main_people,
+        cc_people=cc_people,
+        mentions=None,
         test_mode=False,
         enhanced=enhanced,
         image_url=None,
-        image_sgid=attachable_sgid    # use inline image
+        image_sgid=attachable_sgid
     )
 
     if ok:
@@ -122,6 +129,7 @@ def post_once(config: Dict) -> int:
     else:
         logging.error("Post failed")
         return 7
+
 
 
 
