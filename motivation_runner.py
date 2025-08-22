@@ -13,6 +13,8 @@ from daily_motivation import (
     quote_overlay_on_image,
     upload_image_to_basecamp,
     post_message,
+    post_comment,
+    build_mentions
 )
 
 
@@ -63,6 +65,7 @@ def post_once(config: Dict) -> int:
     account_id: int = int(config["account_id"])
     project_id: int = int(config["project_id"])
     message_board_id: int = int(config["message_board_id"])
+    message_id = config.get("message_id")   # ✅ new
     cc_ids: List[int] = list(config.get("cc_ids", []))
 
     token_data = load_access_token(session_id)
@@ -107,21 +110,46 @@ def post_once(config: Dict) -> int:
         logging.error("Image upload failed; aborting post")
         return 6
 
-    ok = post_message(
-        account_id=account_id,
-        project_id=project_id,
-        message_board_id=message_board_id,
-        access_token=access_token,
-        quote=quote,
-        author=author,
-        project_people=main_people,
-        cc_people=cc_people,
-        mentions=None,
-        test_mode=False,
-        enhanced=enhanced,
-        image_url=None,
-        image_sgid=attachable_sgid
-    )
+    # ✅ Decide between new message or comment
+    if message_id:
+        # Build content manually (similar to post_message)
+        main_mentions = f"Selam {build_mentions(main_people)}" if main_people else ""
+        cc_mentions_html = f"<div><strong>Cc:</strong> <span>{build_mentions(cc_people)}</span></div>" if cc_people else ""
+
+        content = ""
+        if main_mentions:
+            content += f"<p>{main_mentions}</p>"
+        content += f'<p><bc-attachment sgid="{attachable_sgid}"></bc-attachment></p>'
+        if enhanced:
+            content += f"<p>{enhanced}</p>"
+        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
+        if cc_mentions_html:
+            content += cc_mentions_html
+
+        ok = post_comment(
+            account_id=account_id,
+            project_id=project_id,
+            message_id=int(message_id),
+            access_token=access_token,
+            content=content
+        )
+    else:
+        # Normal new message
+        ok = post_message(
+            account_id=account_id,
+            project_id=project_id,
+            message_board_id=message_board_id,
+            access_token=access_token,
+            quote=quote,
+            author=author,
+            project_people=main_people,
+            cc_people=cc_people,
+            mentions=None,
+            test_mode=False,
+            enhanced=enhanced,
+            image_url=None,
+            image_sgid=attachable_sgid
+        )
 
     if ok:
         logging.info("Post succeeded")
@@ -129,8 +157,6 @@ def post_once(config: Dict) -> int:
     else:
         logging.error("Post failed")
         return 7
-
-
 
 
 def main() -> int:

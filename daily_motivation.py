@@ -414,6 +414,40 @@ def deduplicate_mentions_html(html: str) -> str:
         flags=re.DOTALL
     )
 
+
+def post_comment(
+    account_id: int,
+    project_id: int,
+    message_id: int,
+    access_token: str,
+    content: str
+) -> bool:
+    """
+    Post a comment under an existing Basecamp message.
+    """
+    logging.debug("Attempting to post comment to Basecamp")
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "DailyMotivationApp/1.0",
+        "Accept": "application/json",
+        "Content-Type": "application/json; charset=utf-8"
+    }
+
+    url = f"{BASE_URL}/{account_id}/buckets/{project_id}/messages/{message_id}/comments.json"
+    payload = {"content": content}
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        if response.ok:
+            logging.info("✅ Comment posted successfully")
+            return True
+        logging.error(f"❌ Failed to post comment: {response.status_code} - {response.text[:300]}")
+        return False
+    except Exception as e:
+        logging.error(f"Error posting comment: {str(e)}\n{traceback.format_exc()}")
+        return False
+
 def post_message(
     account_id: int,
     project_id: int,
