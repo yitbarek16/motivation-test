@@ -29,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Recreate runner_config.json from secret (base64)
+      - name: Recreate runner_config.json from runner_public.json
         env:
           SESSION_ID: ${{ secrets.SESSION_ID }}
         run: |
@@ -41,7 +41,7 @@ jobs:
             echo "runner_public.json is missing from the repo" >&2
             exit 1
           fi
-          python -c "import json, os; pub=json.load(open('runner_public.json','r', encoding='utf-8')); cfg={'session_id': os.environ['SESSION_ID'], 'account_id': int(pub['account_id']), 'project_id': int(pub['project_id']), 'message_board_id': int(pub['message_board_id']), 'cc_ids': pub.get('cc_ids', [])}; open('runner_config.json','w', encoding='utf-8').write(json.dumps(cfg)); print('runner_config.json built from runner_public.json + SESSION_ID')"
+          python -c "import json; pub=json.load(open('runner_public.json','r', encoding='utf-8')); cfg={'account_id': int(pub['account_id']), 'project_id': int(pub['project_id']), 'parent_message_id': int(pub['parent_message_id']), 'cc_ids': pub.get('cc_ids', [])}; open('runner_config.json','w', encoding='utf-8').write(json.dumps(cfg)); print('✅ runner_config.json built from runner_public.json')"
 
       - name: Recreate access token json from secret (base64)
         env:
@@ -53,7 +53,7 @@ jobs:
             exit 1
           fi
           echo "$ACCESS_TOKEN_JSON_B64" | base64 -d > access_token_${SESSION_ID}.json
-          echo "access_token_${SESSION_ID}.json restored"
+          echo "✅ access_token_${SESSION_ID}.json restored"
 
       - name: Provide OpenRouter API key (if used)
         env:
@@ -70,5 +70,3 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           python motivation_runner.py
-
-
