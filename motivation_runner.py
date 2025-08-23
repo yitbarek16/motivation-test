@@ -48,14 +48,14 @@ def split_people_by_cc(
 
 
 def post_once(config: Dict) -> int:
-    # ✅ only require these now
+    # only require these now
     required = ["account_id", "project_id", "parent_message_id"]
     for key in required:
         if key not in config:
             logging.error(f"Missing required config key: {key}")
             return 2
 
-    # ✅ session_id comes from GitHub secret
+    # session_id comes from GitHub secret
     session_id: str = os.environ.get("SESSION_ID", "").strip()
     if not session_id:
         logging.error("SESSION_ID not found in environment variables")
@@ -84,7 +84,7 @@ def post_once(config: Dict) -> int:
         return 4
     enhanced = enhance_quote(quote, author)
 
-    # 🎨 Choose random background
+    # Choose random background
     candidates = glob.glob("static/*.png")
     base_image = random.choice(candidates) if candidates else "static/1.png"
     if not os.path.exists(base_image):
@@ -106,7 +106,7 @@ def post_once(config: Dict) -> int:
         logging.error("Image upload failed; aborting post")
         return 6
 
-    # ✅ Always post under the parent message
+    # Always post under the parent message
     ok = post_comment(
         account_id=account_id,
         project_id=project_id,
@@ -124,10 +124,10 @@ def post_once(config: Dict) -> int:
 
 
     if ok:
-        logging.info("Post succeeded ✅")
+        logging.info("Post succeeded")
         return 0
     else:
-        logging.error("Post failed ❌")
+        logging.error("Post failed")
         return 7
 
 
@@ -141,7 +141,6 @@ def main() -> int:
         return 1
 
     return post_once(cfg)
-# pisout
 
 if __name__ == "__main__":
     sys.exit(main())

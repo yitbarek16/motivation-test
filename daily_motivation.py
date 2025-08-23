@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import random
 import html
 import logging
 import traceback
@@ -24,27 +25,16 @@ import http.server
 import socketserver
 
 
-load_dotenv() # Load environment variables
-
 # Configuration
 CLIENT_ID = "90ef5a48854d9eb4b98d49b7a6530247c7f180a2"
 CLIENT_SECRET = "bba4f7c9ad0f4aab543f24cee9cb0897692166cb"
-REDIRECT_URI = "http://localhost:5000/oauth/callback"
+
 BASE_URL = "https://3.basecampapi.com"
 TOKEN_FILE = lambda session_id: f"access_token_{session_id}.json"
 REQUEST_TIMEOUT = 10
 # Extend local token validity to minimize re-auth (adjust as needed)
 TOKEN_EXPIRY = timedelta(days=3650)
-#PEXELS_API_KEY = "Zum5sloqdAGsnMHFm4ICOmEDAxZ4O2tujTCResgQWMug7iGQ7b2DFkbh"
 USER_AGENT = "DailyMotivationApp/1.0"
-#QUOTABLE_API_URL = "https://api.quotable.io/random?tags=leadership|success|wisdom||development|resilience|intelligence"
-#ZENQUOTES_API_URL = "https://zenquotes.io/api/quotes"
-EAT_TZ = pytz.timezone("Africa/Nairobi")  # EAT is UTC+3
-
-# Quoteable.io API configuration
-QUOTABLE_API_URL = "https://api.quotable.io/random"
-QUOTABLE_API_KEY = os.getenv("QUOTABLE_API_KEY")  # Optional API key for higher rate limits
-
 
 # Initialize logging
 try:
@@ -110,14 +100,6 @@ def find_available_port(start_port: int = 8000, max_attempts: int = 100) -> int:
     logging.error("No available ports found")
     raise RuntimeError("No available ports found")
 
-def save_access_token(access_token: str, expiry: datetime, session_id: str):
-    try:
-        data = {"access_token": access_token, "expiry": expiry.isoformat()}
-        with open(TOKEN_FILE(session_id), "w", encoding="utf-8") as f:
-            json.dump(data, f)
-        logging.info("Access token saved successfully")
-    except Exception as e:
-        logging.error(f"Failed to save access token: {e}")
 
 def load_access_token(session_id: str) -> Optional[Dict]:
     try:
@@ -134,72 +116,6 @@ def load_access_token(session_id: str) -> Optional[Dict]:
         logging.debug("Token file not found or invalid")
         return None
 
-def get_access_token(session_id: str) -> Optional[str]:
-    token_data = load_access_token(session_id)
-    if token_data and token_data.get("access_token"):
-        logging.debug("Using existing access token")
-        return token_data["access_token"]
-    port = find_available_port()
-    AUTH_URL = f"https://launchpad.37signals.com/authorization/new?type=web_server&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
-    class OAuthHandler(http.server.SimpleHTTPRequestHandler):
-        def do_GET(self):
-            try:
-                if self.path.startswith('/oauth/callback'):
-                    params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-                    code = params.get('code', [None])[0]
-                    if code:
-                        token_response = requests.post(
-                            "https://launchpad.37signals.com/authorization/token.json",
-                            data={
-                                "type": "web_server",
-                                "client_id": CLIENT_ID,
-                                "client_secret": CLIENT_SECRET,
-                                "redirect_uri": REDIRECT_URI,
-                                "code": code
-                            },
-                            timeout=REQUEST_TIMEOUT
-                        )
-                        if token_response.ok:
-                            token_data = token_response.json()
-                            access_token = token_data.get("access_token")
-                            if access_token:
-                                expiry = datetime.now(timezone.utc) + TOKEN_EXPIRY
-                                save_access_token(access_token, expiry, session_id)
-                                self.respond_with("Success! You can close this tab.")
-                            else:
-                                error_msg = token_data.get("error", "No access token")
-                                logging.error(f"Token exchange failed: {error_msg}")
-                                self.respond_with(f"Token exchange failed: {error_msg}")
-                        else:
-                            error_msg = token_response.text
-                            logging.error(f"Token exchange failed: {error_msg}")
-                            self.respond_with(f"Token exchange failed: {error_msg}")
-                    else:
-                        error_msg = params.get('error', ['No code received'])[0]
-                        logging.error(f"OAuth callback error: {error_msg}")
-                        self.respond_with(f"Authentication failed: {error_msg}")
-                else:
-                    logging.error(f"Invalid callback URL: {self.path}")
-                    self.respond_with("Invalid callback URL")
-            except Exception as e:
-                logging.error(f"OAuth handler error: {e}")
-                self.respond_with(f"Authentication error: {e}")
-        def respond_with(self, message):
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            self.wfile.write(f"<html><body><h1>{message}</h1></body></html>".encode())
-    try:
-        logging.info("Initiating OAuth flow")
-        webbrowser.open(AUTH_URL)
-        with socketserver.TCPServer(("localhost", port), OAuthHandler) as httpd:
-            httpd.timeout = 120
-            httpd.handle_request()
-    except Exception as e:
-        logging.error(f"OAuth flow failed: {e}")
-        return None
-    token_data = load_access_token(session_id)
-    return token_data.get("access_token") if token_data else None
 
 def get_account_info(access_token: str) -> Optional[int]:
     headers = {"Authorization": f"Bearer {access_token}", "User-Agent": USER_AGENT}
@@ -502,203 +418,6 @@ def post_comment(
         return False
 
 
-def post_message(
-    account_id: int,
-    project_id: int,
-    message_board_id: int,
-    access_token: str,
-    image_url: Optional[str] = None,
-    image_sgid: Optional[str] = None,
-    mentions: Optional[str] = None,
-    quote: Optional[str] = None,
-    author: Optional[str] = None,
-    test_mode: bool = False,
-    project_people: Optional[List[Dict]] = None,
-    cc_people: Optional[List[Dict]] = None,
-    enhanced: Optional[str] = None
-) -> bool:
-    """
-    Post a message to a Basecamp message board with correct Basecamp mention formatting:
-      - Main mentions at the top: "Selam <bc-entity ...>, <bc-entity ...>"
-      - CC list at the bottom: "Cc: <bc-entity ...>, <bc-entity ...>"
-    """
-    logging.debug("Attempting to post message to Basecamp")
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "User-Agent": "DailyMotivationApp/1.0",
-        "Accept": "application/json",
-        "Content-Type": "application/json; charset=utf-8"
-    }
-
-    url = f"{BASE_URL}/{account_id}/buckets/{project_id}/message_boards/{message_board_id}/messages.json"
-
-    try:
-        # --- Build main mentions ---
-        main_mentions = ""
-        if project_people:
-            mention_html = build_mentions(project_people)  # ✅ use Basecamp mention tags
-            if mention_html.strip():
-                main_mentions = f"Selam {mention_html}"
-
-        # --- Build CC mentions ---
-        cc_mentions_html = ""
-        cc_mentions_html = ""
-        if cc_people:
-            cc_html = build_mentions(cc_people)   # space-joined mentions
-            if cc_html.strip():
-                cc_mentions_html = f"<div><strong>Cc:</strong> <span>{cc_html}</span></div>"
-
-        # --- Compose content ---
-        content = ""
-        if main_mentions:
-            content += f"<p>{main_mentions}</p>"
-
-        if image_sgid:
-            content += f'<p><bc-attachment sgid="{image_sgid}"></bc-attachment></p>'
-        elif image_url:
-            content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
-
-        if enhanced:
-            content += f"<p>{enhanced}</p>"
-
-        content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
-
-        if cc_mentions_html:
-            content += cc_mentions_html
-
-        # --- Deduplicate mentions ---
-        content = deduplicate_mentions_html(content)
-
-        # Debug
-        logging.debug("----- POST CONTENT TO BASECAMP -----")
-        logging.debug(content)
-        logging.debug("----- END POST CONTENT -----")
-
-        payload = {
-            "subject": "Daily Inspiration",
-            "content": content,
-            "status": "active"
-        }
-
-        response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-
-        if response.ok:
-            logging.info("Message posted successfully")
-            return True
-
-        logging.error(f"Failed to post message: {response.status_code} - {response.text[:300]}")
-        return False
-
-    except Exception as e:
-        logging.error(f"Error posting message: {str(e)}\n{traceback.format_exc()}")
-        return False
-
-
-def schedule_daily_post(
-    account_id: int,
-    project_id: int,
-    message_board_id: int,
-    access_token: str,
-    schedule_time: str,
-    cc_people: Optional[List[Dict]] = None,
-    test_mode: bool = False,
-    project_people: Optional[List[Dict]] = None
-):
-    schedule.clear()
-
-    def job():
-        now = datetime.now(EAT_TZ)
-        if not test_mode and now.weekday() >= 5:
-            logging.info(f"Skipping post on {now.strftime('%A')} (weekend)")
-            return
-
-        logging.info(f"Running scheduled post at {now.strftime('%Y-%m-%d %H:%M:%S')}")
-
-        # Get all project people if not provided
-        if not project_people:
-            project_people = get_project_people(account_id, project_id, access_token)
-
-        # Separate main people from CC people
-        cc_ids = {str(p["id"]) for p in (cc_people or [])}
-        main_people = [p for p in project_people if str(p["id"]) not in cc_ids]
-        
-        logging.info(f"Main people for mentions: {len(main_people)}")
-        logging.info(f"CC people: {len(cc_people or [])}")
-
-        # Clean CCs (exclude "Selam" and ensure they're valid)
-        filtered_cc_people = [
-            p for p in (cc_people or [])
-            if p.get("name", "").strip().lower() != "selam" and p.get("sgid")
-        ]
-
-        # Get quote from Quoteable.io and enhance with AI model
-        quote, author = get_quote()
-        enhanced = enhance_quote(quote, author)
-
-        # Generate image locally - overlay new quote on existing img1.png
-        base_image = "static/1.png"
-        output_image = "static/img1.png"  # Always use img1.png as output
-        
-        # Generate the quote image (overlays new quote on img1.png)
-        quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
-        
-        logging.info(f"Generated quote overlay on img1.png: '{quote}' — {author}")
-
-        # Upload image to Basecamp
-        from daily_motivation import upload_image_to_basecamp
-        attachable_sgid = upload_image_to_basecamp(
-            account_id=account_id,
-            access_token=access_token,
-            image_path=output_image
-        )
-
-        # Post message with proper mention structure
-        success = post_message(
-            account_id=account_id,
-            access_token=access_token,
-            quote=quote,
-            author=author,
-            test_mode=test_mode,
-            project_people=main_people,       # Main mentions above the post
-            cc_people=filtered_cc_people,     # CC mentions below footer
-            enhanced=enhanced,
-            image_url=None,
-            image_sgid=attachable_sgid
-        )
-
-        if success:
-            logging.info("Scheduled message posted successfully")
-            # No cleanup needed - we're using single img1.png file
-        else:
-            logging.error("Scheduled message failed to post")
-
-    # ✅ Test mode: just run once immediately
-    if test_mode:
-        job()
-        return
-
-    # Real daily scheduling
-    try:
-        datetime.strptime(schedule_time, "%H:%M")
-        schedule.every().day.at(schedule_time).do(job)
-        logging.info(f"Scheduled daily post at {schedule_time} EAT (Monday–Friday)")
-    except ValueError:
-        logging.error(f"Invalid time format for scheduling: {schedule_time}")
-        return
-
-    # Run scheduler loop
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
-
-
-
-QUOTABLE_API_URL = "https://zenquotes.io/api/quotes/random"
-QUOTABLE_API_KEY = None  # Add your API key if you have one
-USER_AGENT = "MotivationFetcher/1.0"
-REQUEST_TIMEOUT = 5  # seconds
-import random
 def get_fallback_quote():
     fallback_quotes = [
         ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill")
@@ -745,37 +464,7 @@ def enhance_quote(quote, author):
 Now expand on it with a short, uplifting message that inspires action and hope. 
 Do not repeat the original quote. Do not use quotation marks at the beginning or end.
 Feel free to add emojis (except heart emojis).
-Only return the enhanced message. Do not include any introductions, explanations, or closing remarks.
-"""
-    try:
-        completion = client.chat.completions.create(
-            model="mistralai/mistral-small-3.2-24b-instruct:free",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-        )
-        return completion.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"[ERROR] Failed to enhance quote: {e}")
-        return None
-
-# OpenRouter client
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-)
-
-def enhance_quote(quote, author):
-    """
-    Expands on the given quote with a short, uplifting message that inspires action and hope.
-    """
-    prompt = f"""Here's a motivational quote:
-"{quote} — {author}"
-
-Now expand on it with a short, uplifting message that inspires action and hope. 
-Do not repeat the original quote. Do not use quotation marks at the beginning or end.
-Feel free to add emojis (except heart emojis).
-Only return the enhanced message. Do not include any introductions, explanations, or closing remarks.
+Only return the only enhanced message. Do not include any introductions, explanations, or closing remarks.
 """
     try:
         completion = client.chat.completions.create(

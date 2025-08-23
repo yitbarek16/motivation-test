@@ -2,8 +2,7 @@ name: daily
 
 on:
   schedule:
-    # every 5 minutes (use this while testing)
-    - cron: "*/5 * * * *"
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       run_immediately:
