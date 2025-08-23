@@ -2,8 +2,8 @@ name: daily
 
 on:
   schedule:
-    # 06:00 UTC ≈ 09:00 EAT (Mon–Fri)
-    - cron: "0 3 * * *"
+    # every 5 minutes (use this while testing)
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       run_immediately:
@@ -30,31 +30,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Recreate runner_config.json from runner_public.json
-        env:
-          SESSION_ID: ${{ secrets.SESSION_ID }}
         run: |
-          if [ -z "$SESSION_ID" ]; then
-            echo "SESSION_ID secret is missing" >&2
-            exit 1
-          fi
           if [ ! -f runner_public.json ]; then
             echo "runner_public.json is missing from the repo" >&2
             exit 1
           fi
-          python - <<'PY'
-import json
-with open('runner_public.json','r', encoding='utf-8') as f:
-    pub = json.load(f)
-cfg = {
-    "account_id": int(pub["account_id"]),
-    "project_id": int(pub["project_id"]),
-    "parent_message_id": int(pub["parent_message_id"]),
-    "cc_ids": pub.get("cc_ids", [])
-}
-with open('runner_config.json','w', encoding='utf-8') as f:
-    json.dump(cfg, f)
-print("✅ runner_config.json written")
-PY
+          python -c "import json; pub=json.load(open('runner_public.json','r', encoding='utf-8')); cfg={'account_id': int(pub['account_id']), 'project_id': int(pub['project_id']), 'parent_message_id': int(pub['parent_message_id']), 'cc_ids': pub.get('cc_ids', [])}; open('runner_config.json','w', encoding='utf-8').write(json.dumps(cfg)); print('runner_config.json built (thread mode)')"
 
       - name: Recreate access token json from secret (base64)
         env:
