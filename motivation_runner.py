@@ -29,16 +29,15 @@ def configure_logging() -> None:
 def read_config(config_path: str = DEFAULT_CONFIG_PATH) -> Dict:
     if not os.path.exists(config_path):
         raise FileNotFoundError(
-            f"Config file not found: {config_path}. Create it with required fields: "
-            "session_id, account_id, project_id, parent_message_id, (optional: cc_ids)."
+            f"Config file not found: {config_path}. Required: "
+            "account_id, project_id, parent_message_id, (optional: cc_ids)."
         )
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def split_people_by_cc(
-    all_people: List[Dict],
-    cc_ids: Optional[List[int]]
+    all_people: List[Dict], cc_ids: Optional[List[int]]
 ) -> Tuple[List[Dict], List[Dict]]:
     if not all_people:
         return [], []
@@ -49,13 +48,14 @@ def split_people_by_cc(
 
 
 def post_once(config: Dict) -> int:
+    # ✅ only require these now
     required = ["account_id", "project_id", "parent_message_id"]
     for key in required:
         if key not in config:
             logging.error(f"Missing required config key: {key}")
             return 2
 
-    # ✅ session_id from GitHub Secrets (environment variable)
+    # ✅ session_id comes from GitHub secret
     session_id: str = os.environ.get("SESSION_ID", "").strip()
     if not session_id:
         logging.error("SESSION_ID not found in environment variables")
@@ -68,14 +68,12 @@ def post_once(config: Dict) -> int:
 
     token_data = load_access_token(session_id)
     if not token_data:
-        logging.error(
-            "No valid access token found. Authenticate once on a machine with a browser and copy the token JSON to this server."
-        )
+        logging.error("No valid access token found. Authenticate once locally and copy the token JSON to this server.")
         return 3
 
     access_token: str = token_data["access_token"]
 
-    # Resolve people for mentions
+    # Resolve mentions
     all_people = get_project_people(account_id, project_id, access_token)
     main_people, cc_people = split_people_by_cc(all_people, cc_ids)
 
@@ -86,7 +84,7 @@ def post_once(config: Dict) -> int:
         return 4
     enhanced = enhance_quote(quote, author)
 
-    # 🎨 Pick random background
+    # 🎨 Choose random background
     candidates = glob.glob("static/*.png")
     base_image = random.choice(candidates) if candidates else "static/1.png"
     if not os.path.exists(base_image):
@@ -94,9 +92,7 @@ def post_once(config: Dict) -> int:
 
     output_image = "output/img1.png"
     try:
-        quote_overlay_on_image(
-            base_image, f"{quote} — {author}", output_path=output_image
-        )
+        quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
     except Exception as e:
         logging.error(f"Failed to generate image: {e}")
         return 5
@@ -110,7 +106,7 @@ def post_once(config: Dict) -> int:
         logging.error("Image upload failed; aborting post")
         return 6
 
-    # ✅ Always post as a comment under parent_message_id
+    # ✅ Always post under the parent message
     ok = post_comment(
         account_id=account_id,
         project_id=project_id,
@@ -125,12 +121,11 @@ def post_once(config: Dict) -> int:
     )
 
     if ok:
-        logging.info("Post succeeded")
+        logging.info("Post succeeded ✅")
         return 0
     else:
-        logging.error("Post failed")
+        logging.error("Post failed ❌")
         return 7
-
 
 
 def main() -> int:
