@@ -119,6 +119,9 @@ def post_once(config: Dict) -> int:
         cc_people=cc_people,
         enhanced=enhanced,
     )
+    logging.info(f"Loaded config keys: {list(config.keys())}")
+    logging.info(f"SESSION_ID present? {'yes' if session_id else 'no'}")
+
 
     if ok:
         logging.info("Post succeeded ✅")
