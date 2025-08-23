@@ -41,7 +41,20 @@ jobs:
             echo "runner_public.json is missing from the repo" >&2
             exit 1
           fi
-          python -c "import json; pub=json.load(open('runner_public.json','r', encoding='utf-8')); cfg={'account_id': int(pub['account_id']), 'project_id': int(pub['project_id']), 'parent_message_id': int(pub['parent_message_id']), 'cc_ids': pub.get('cc_ids', [])}; open('runner_config.json','w', encoding='utf-8').write(json.dumps(cfg)); print('✅ runner_config.json built from runner_public.json')"
+          python - <<'PY'
+import json
+with open('runner_public.json','r', encoding='utf-8') as f:
+    pub = json.load(f)
+cfg = {
+    "account_id": int(pub["account_id"]),
+    "project_id": int(pub["project_id"]),
+    "parent_message_id": int(pub["parent_message_id"]),
+    "cc_ids": pub.get("cc_ids", [])
+}
+with open('runner_config.json','w', encoding='utf-8') as f:
+    json.dump(cfg, f)
+print("✅ runner_config.json written")
+PY
 
       - name: Recreate access token json from secret (base64)
         env:
@@ -55,18 +68,17 @@ jobs:
           echo "$ACCESS_TOKEN_JSON_B64" | base64 -d > access_token_${SESSION_ID}.json
           echo "✅ access_token_${SESSION_ID}.json restored"
 
-      - name: Provide OpenRouter API key (if used)
+      - name: Preflight check
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SESSION_ID: ${{ secrets.SESSION_ID }}
         run: |
-          if [ -n "$OPENROUTER_API_KEY" ]; then
-            echo "OPENROUTER_API_KEY present"
-          else
-            echo "OPENROUTER_API_KEY not set; proceeding without it"
-          fi
+          test -f "runner_config.json" || (echo "runner_config.json missing" >&2; exit 1)
+          test -f "access_token_${SESSION_ID}.json" || (echo "access token file missing" >&2; exit 1)
+          echo "✅ Preflight OK"
 
       - name: Run motivation_runner.py
         env:
+          SESSION_ID: ${{ secrets.SESSION_ID }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           python motivation_runner.py
