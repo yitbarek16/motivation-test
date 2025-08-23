@@ -656,8 +656,6 @@ def schedule_daily_post(
         # Post message with proper mention structure
         success = post_message(
             account_id=account_id,
-            project_id=project_id,
-            message_board_id=message_board_id,
             access_token=access_token,
             quote=quote,
             author=author,
