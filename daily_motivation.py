@@ -441,20 +441,25 @@ def post_comment(
         "Content-Type": "application/json; charset=utf-8"
     }
 
+    # ✅ Always use the recordings/{id}/comments.json endpoint for threaded comments
     url = f"{BASE_URL}/{account_id}/buckets/{project_id}/recordings/{parent_message_id}/comments.json"
 
     try:
-        # Build main mentions
+        # --- Build main mentions ---
         main_mentions = ""
         if project_people:
-            main_mentions = f"Selam {build_mentions(project_people)}"
+            mention_html = build_mentions(project_people)
+            if mention_html.strip():
+                main_mentions = f"Selam {mention_html}"
 
-        # Build CC mentions
+        # --- Build CC mentions ---
         cc_mentions_html = ""
         if cc_people:
-            cc_mentions_html = f"<p><strong>Cc:</strong> {build_mentions(cc_people)}</p>"
+            cc_html = build_mentions(cc_people)
+            if cc_html.strip():
+                cc_mentions_html = f"<div><strong>Cc:</strong> <span>{cc_html}</span></div>"
 
-        # Content body
+        # --- Compose comment body ---
         content = ""
         if main_mentions:
             content += f"<p>{main_mentions}</p>"
@@ -467,28 +472,35 @@ def post_comment(
         if enhanced:
             content += f"<p>{enhanced}</p>"
 
+        # Footer
         content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
 
         if cc_mentions_html:
             content += cc_mentions_html
 
-        # Deduplicate mentions
+        # --- Deduplicate mentions ---
         content = deduplicate_mentions_html(content)
+
+        # Debug log
+        logging.debug("----- POST COMMENT CONTENT -----")
+        logging.debug(content)
+        logging.debug("----- END POST COMMENT -----")
 
         payload = {"content": content}
 
         response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
 
         if response.ok:
-            logging.info("Comment posted successfully")
+            logging.info("✅ Comment posted successfully")
             return True
 
-        logging.error(f"Failed to post comment: {response.status_code} - {response.text[:300]}")
+        logging.error(f"❌ Failed to post comment: {response.status_code} - {response.text[:300]}")
         return False
 
     except Exception as e:
         logging.error(f"Error posting comment: {str(e)}\n{traceback.format_exc()}")
         return False
+
 
 def post_message(
     account_id: int,

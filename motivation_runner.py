@@ -13,9 +13,7 @@ from daily_motivation import (
     enhance_quote,
     quote_overlay_on_image,
     upload_image_to_basecamp,
-    post_message,
     post_comment,
-    build_mentions
 )
 
 DEFAULT_CONFIG_PATH = "runner_config.json"
@@ -32,7 +30,7 @@ def read_config(config_path: str = DEFAULT_CONFIG_PATH) -> Dict:
     if not os.path.exists(config_path):
         raise FileNotFoundError(
             f"Config file not found: {config_path}. Create it with required fields: "
-            "session_id, account_id, project_id, message_board_id, (optional: parent_message_id, cc_ids)."
+            "session_id, account_id, project_id, parent_message_id, (optional: cc_ids)."
         )
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -51,7 +49,7 @@ def split_people_by_cc(
 
 
 def post_once(config: Dict) -> int:
-    required = ["session_id", "account_id", "project_id", "message_board_id"]
+    required = ["session_id", "account_id", "project_id", "parent_message_id"]
     for key in required:
         if key not in config:
             logging.error(f"Missing required config key: {key}")
@@ -60,8 +58,7 @@ def post_once(config: Dict) -> int:
     session_id: str = str(config["session_id"]).strip()
     account_id: int = int(config["account_id"])
     project_id: int = int(config["project_id"])
-    message_board_id: int = int(config["message_board_id"])
-    parent_message_id = config.get("parent_message_id")  # ✅ for thread mode
+    parent_message_id = int(config["parent_message_id"])
     cc_ids: List[int] = list(config.get("cc_ids", []))
 
     token_data = load_access_token(session_id)
@@ -104,36 +101,19 @@ def post_once(config: Dict) -> int:
         logging.error("Image upload failed; aborting post")
         return 6
 
-    # ✅ Threaded comment vs new message
-    if parent_message_id:
-        ok = post_comment(
-            account_id=account_id,
-            project_id=project_id,
-            parent_message_id=int(parent_message_id),
-            access_token=access_token,
-            image_sgid=attachable_sgid,
-            quote=quote,
-            author=author,
-            project_people=main_people,
-            cc_people=cc_people,
-            enhanced=enhanced,
-        )
-    else:
-        ok = post_message(
-            account_id=account_id,
-            project_id=project_id,
-            message_board_id=message_board_id,
-            access_token=access_token,
-            quote=quote,
-            author=author,
-            project_people=main_people,
-            cc_people=cc_people,
-            mentions=None,
-            test_mode=False,
-            enhanced=enhanced,
-            image_url=None,
-            image_sgid=attachable_sgid
-        )
+    # ✅ Always post as a comment under parent_message_id
+    ok = post_comment(
+        account_id=account_id,
+        project_id=project_id,
+        parent_message_id=parent_message_id,
+        access_token=access_token,
+        image_sgid=attachable_sgid,
+        quote=quote,
+        author=author,
+        project_people=main_people,
+        cc_people=cc_people,
+        enhanced=enhanced,
+    )
 
     if ok:
         logging.info("Post succeeded")
