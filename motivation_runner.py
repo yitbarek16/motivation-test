@@ -49,21 +49,28 @@ def split_people_by_cc(
 
 
 def post_once(config: Dict) -> int:
-    required = ["session_id", "account_id", "project_id", "parent_message_id"]
+    required = ["account_id", "project_id", "parent_message_id"]
     for key in required:
         if key not in config:
             logging.error(f"Missing required config key: {key}")
             return 2
 
-    session_id: str = str(config["session_id"]).strip()
+    # ✅ session_id from GitHub Secrets (environment variable)
+    session_id: str = os.environ.get("SESSION_ID", "").strip()
+    if not session_id:
+        logging.error("SESSION_ID not found in environment variables")
+        return 2
+
     account_id: int = int(config["account_id"])
     project_id: int = int(config["project_id"])
-    parent_message_id = int(config["parent_message_id"])
+    parent_message_id: int = int(config["parent_message_id"])
     cc_ids: List[int] = list(config.get("cc_ids", []))
 
     token_data = load_access_token(session_id)
     if not token_data:
-        logging.error("No valid access token found. Authenticate once on a machine with a browser and copy the token JSON to this server.")
+        logging.error(
+            "No valid access token found. Authenticate once on a machine with a browser and copy the token JSON to this server."
+        )
         return 3
 
     access_token: str = token_data["access_token"]
@@ -87,7 +94,9 @@ def post_once(config: Dict) -> int:
 
     output_image = "output/img1.png"
     try:
-        quote_overlay_on_image(base_image, f"{quote} — {author}", output_path=output_image)
+        quote_overlay_on_image(
+            base_image, f"{quote} — {author}", output_path=output_image
+        )
     except Exception as e:
         logging.error(f"Failed to generate image: {e}")
         return 5
@@ -121,6 +130,7 @@ def post_once(config: Dict) -> int:
     else:
         logging.error("Post failed")
         return 7
+
 
 
 def main() -> int:
