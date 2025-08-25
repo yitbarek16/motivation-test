@@ -357,7 +357,7 @@ def post_comment(
         "Content-Type": "application/json; charset=utf-8"
     }
 
-    # ✅ Always use the recordings/{id}/comments.json endpoint for threaded comments
+
     url = f"{BASE_URL}/{account_id}/buckets/{project_id}/recordings/{parent_message_id}/comments.json"
 
     try:
@@ -366,7 +366,7 @@ def post_comment(
         if project_people:
             mention_html = build_mentions(project_people)
             if mention_html.strip():
-                main_mentions = f"Selam {mention_html}"
+                main_mentions = f"Good Morning {mention_html}"
 
         # --- Build CC mentions ---
         cc_mentions_html = ""
@@ -407,10 +407,10 @@ def post_comment(
         response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
 
         if response.ok:
-            logging.info("✅ Comment posted successfully")
+            logging.info("Comment posted successfully")
             return True
 
-        logging.error(f"❌ Failed to post comment: {response.status_code} - {response.text[:300]}")
+        logging.error(f"Failed to post comment: {response.status_code} - {response.text[:300]}")
         return False
 
     except Exception as e:
