@@ -473,12 +473,24 @@ def get_quote():
     """
     used = load_used_quotes()
 
-    prompt = """Generate one(1) short, original, and unique for every motivational quote suitable for a workplace.
-The quote should be professional, focused on discipline, growth, persistence, and teamwork.
-Do NOT include love, romance, or overly personal themes.
-Return the result in the format: "Quote text" — Author
-If you cannot find an author, use "Anonymous".
-for example: Discipline is the bridge between goals and accomplishment. — Jim Rohn"""
+    prompt = """
+Generate one (1) short, original, and unique motivational quote suitable for a professional workplace.
+Tone & Style:
+- Thoughtful, simple, and inspiring — like a gentle reminder that encourages reflection.
+- Focus on discipline, growth, persistence, focus, teamwork, resilience, and purpose.
+- Keep it short (max 20 words), deep, and easy to understand.
+- It should sound meaningful enough that employees would reflect on it during their workday.
+
+Content Rules:
+- DO NOT include love, romance, or overly personal themes.
+- DO NOT produce quotes that could encourage resignation, giving up, rebellion, laziness, or negativity.
+- Quotes must encourage positive action, hope, and responsibility in a workplace context.
+- Avoid clichés or generic internet-style phrases.
+
+Format:
+Quote text — Anonymous
+for example: Discipline is the bridge between goals and accomplishment. — Jim Rohn
+Do not include any quotation marks, introductions, explanations, or closing remarks"""
 
     try:
         for _ in range(5):  # retry up to 5 times if duplicates
