@@ -279,9 +279,10 @@ def upload_image_to_basecamp(account_id: int, access_token: str, image_path: str
             except Exception as e:
                 logging.error(f"Failed to clean up temporary image {image_path}: {e}")
 
+
 def build_mentions(project_people: Optional[List[Dict]]) -> str:
     """
-    Build mentions for a list of people, ensuring proper formatting and deduplication.
+    Build mentions for a list of people, preserving input order.
     Returns formatted mentions string ready for HTML insertion.
     """
     logging.debug(f"build_mentions called with {len(project_people or [])} people")
@@ -289,11 +290,10 @@ def build_mentions(project_people: Optional[List[Dict]]) -> str:
         logging.debug("No project people, returning 'Team'")
         return "Team"
 
-    # Stable order by casefolded name; dedupe strictly by sgid
     seen_sgids = set()
     tags = []
 
-    for p in sorted(project_people, key=lambda x: x.get("name", "").casefold()):
+    for p in project_people:  # 🚀 no sorting, preserve order
         sgid = p.get("sgid")
         if not sgid or sgid in seen_sgids:
             continue
@@ -303,9 +303,10 @@ def build_mentions(project_people: Optional[List[Dict]]) -> str:
             seen_sgids.add(sgid)
 
     if tags:
-        return f"{' '.join(tags)}"
+        return " ".join(tags)
     else:
         return "Team"
+
 
 def deduplicate_mentions_html(html: str) -> str:
     """
