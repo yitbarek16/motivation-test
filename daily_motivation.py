@@ -473,7 +473,7 @@ def get_quote():
     """
     used = load_used_quotes()
 
-    prompt = """Generate a short, original, and unique for every motivational quote suitable for a workplace.
+    prompt = """Generate one(1) short, original, and unique for every motivational quote suitable for a workplace.
 The quote should be professional, focused on discipline, growth, persistence, and teamwork.
 Do NOT include love, romance, or overly personal themes.
 Return the result in the format: "Quote text" — Author
