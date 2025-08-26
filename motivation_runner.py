@@ -41,10 +41,20 @@ def split_people_by_cc(
 ) -> Tuple[List[Dict], List[Dict]]:
     if not all_people:
         return [], []
-    cc_id_str = {str(pid) for pid in (cc_ids or [])}
-    cc_people = [p for p in all_people if str(p.get("id")) in cc_id_str]
-    main_people = [p for p in all_people if str(p.get("id")) not in cc_id_str]
+
+    cc_ids = cc_ids or []
+    # Build quick lookup by ID
+    people_by_id = {str(p["id"]): p for p in all_people}
+
+    # ✅ CCs exactly in the order you gave in JSON
+    cc_people = [people_by_id[str(pid)] for pid in cc_ids if str(pid) in people_by_id]
+
+    # Main people = all others (in API’s order, usually alphabetical)
+    cc_set = set(str(pid) for pid in cc_ids)
+    main_people = [p for p in all_people if str(p.get("id")) not in cc_set]
+
     return main_people, cc_people
+
 
 
 def post_once(config: Dict) -> int:
