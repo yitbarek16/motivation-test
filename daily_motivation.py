@@ -488,7 +488,7 @@ Content Rules:
 - Avoid clichés or generic internet-style phrases.
 
 Format:
-Quote text — Anonymous
+Quote text — Author/Annonymous
 for example: Discipline is the bridge between goals and accomplishment. — Jim Rohn
 Do not include any quotation marks, introductions, explanations, or closing remarks"""
 
@@ -536,10 +536,14 @@ def enhance_quote(quote, author):
     prompt = f"""Here's a motivational quote:
 "{quote} — {author}"
 
-Now expand on it with a short, uplifting message that inspires action and hope. 
-Do not repeat the original quote. Do not use quotation marks at the beginning or end.
-Feel free to add emojis (except heart emojis).
-Only return the only enhanced message. Do not include any introductions, explanations, or closing remarks.
+Now expand on it with a short (max 80 words), uplifting message. 
+- Tone: professional, thoughtful, and inspiring — suitable for a workplace team.
+- Focus only on discipline, growth, persistence, focus, teamwork, resilience, or purpose.
+- Avoid clichés, fluff, love, or negativity.
+- Do not repeat the original quote. Do not use quotation marks at the beginning or end.
+- Feel free to add emojis (except heart emojis).
+- Only return the only enhanced message. Do not include any introductions, explanations, or closing remarks.
+- Do not include your intro like "Here's an enhanced message based on the quote provided:".
 """
     try:
         completion = client.chat.completions.create(
