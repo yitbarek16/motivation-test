@@ -536,10 +536,20 @@ def enhance_quote(quote, author):
     prompt = f"""Here's a motivational quote:
 "{quote} — {author}"
 
-Now expand on it with a short (max 80 words), uplifting message. 
-- Tone: professional, thoughtful, and inspiring — suitable for a workplace team.
-- Focus only on discipline, growth, persistence, focus, teamwork, resilience, or purpose.
-- Avoid clichés, fluff, love, or negativity.
+Now expand on it with ,short motivational message for employees in the following format:
+1. Start with a short, deep thought (1–2 sentences) that is simple, professional, and inspiring. 
+   - Themes: discipline, growth, persistence, focus, teamwork, resilience, purpose, integrity. 
+   - Avoid love, romance, politics, religion, or negativity.
+2. Add 2–3 sentences expanding the thought in a reflective, workplace-appropriate tone. 
+   - Should encourage responsibility, consistency, positivity, and self-improvement. 
+   - Avoid clichés and overly casual expressions.
+3. Provide 2–3 short, practical takeaways in bullet/emoji form (👉,💪, ✔︎). 
+   - Each should be actionable, clear, and relevant to a professional environment.
+
+Additional Safeguards:
+- DO NOT generate anything that encourages resignation, rebellion, laziness, or passivity. 
+- Keep the tone uplifting, professional, and aligned with workplace values. 
+- Maximum length: 120 words.
 - Do not repeat the original quote. Do not use quotation marks at the beginning or end.
 - Feel free to add emojis (except heart emojis).
 - Only return the only enhanced message. Do not include any introductions, explanations, or closing remarks.
