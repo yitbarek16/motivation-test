@@ -387,20 +387,22 @@ def post_comment(
             content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
 
         if enhanced:
-            # Normalize line breaks
             text = enhanced.replace("\r\n", "\n").strip()
 
-            # Convert markdown-style bold (**...**) into HTML <strong>
+            # Convert Markdown-style bold (**...**) into <strong>
             text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
 
-            # Replace double newlines with separate paragraphs
-            text = text.replace("\n\n", "</p><p>")
+            # First, split into paragraphs at double newlines
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
-            # Replace single newlines with <br> for line breaks inside paragraphs
-            text = text.replace("\n", "<br>")
+            # Wrap each paragraph in <p> ... </p>
+            formatted_parts = []
+            for para in paragraphs:
+                # Inside a paragraph, keep single newlines as <br>
+                para_html = para.replace("\n", "<br>")
+                formatted_parts.append(f"<p>{para_html}</p>")
 
-            # Wrap everything in <p> ... </p>
-            formatted = f"<p>{text}</p>"
+            formatted = "".join(formatted_parts)
 
             content += formatted
 
