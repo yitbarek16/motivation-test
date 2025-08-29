@@ -558,10 +558,10 @@ Now expand on it with ,short motivational message for employees in the following
 2. Add 2–3 sentences expanding the thought in a reflective, workplace-appropriate tone. 
    - Should encourage responsibility, consistency, positivity, and self-improvement. 
    - Avoid clichés and overly casual expressions.
-3. Provide 2–3 short, practical takeaways in bullet/emoji form,use one of those(👉,💪, ✔︎). 
+3. Provide 2–3 short, practical takeaways in bullet/emoji form. 
    - Each should be actionable, clear, and relevant to a professional environment.
 4. End with a positive, uplifting closing sentence.
-5. Format the message with clear line breaks and a line spacing between ideas, so it looks visually engaging and easy to read.
+5. Format the message with clear line breaks and a line spacing(one empty line) between ideas, so it looks visually engaging and easy to read.
 Additional Safeguards:
 - DO NOT generate anything that encourages resignation, rebellion, laziness, or passivity. 
 - Keep the tone uplifting, professional, and aligned with workplace values. 
