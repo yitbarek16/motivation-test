@@ -387,14 +387,22 @@ def post_comment(
             content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
 
         if enhanced:
-            # Convert line breaks to HTML formatting for Basecamp
-            formatted = (
-                enhanced.replace("\r\n", "\n")
-                        .replace("\n\n", "</p><p>")
-                        .replace("\n", "<br>")
-            )
-            content += f"<p>{formatted}</p>"
+            # Normalize line breaks
+            text = enhanced.replace("\r\n", "\n").strip()
 
+            # Convert markdown-style bold (**...**) into HTML <strong>
+            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+
+            # Replace double newlines with separate paragraphs
+            text = text.replace("\n\n", "</p><p>")
+
+            # Replace single newlines with <br> for line breaks inside paragraphs
+            text = text.replace("\n", "<br>")
+
+            # Wrap everything in <p> ... </p>
+            formatted = f"<p>{text}</p>"
+
+            content += formatted
 
         # Footer
         content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
