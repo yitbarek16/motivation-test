@@ -387,7 +387,14 @@ def post_comment(
             content += f'<p><img src="{image_url}" alt="Motivational Quote" style="max-width:100%;"></p>'
 
         if enhanced:
-            content += f"<p>{enhanced}</p>"
+            # Convert line breaks to HTML formatting for Basecamp
+            formatted = (
+                enhanced.replace("\r\n", "\n")
+                        .replace("\n\n", "</p><p>")
+                        .replace("\n", "<br>")
+            )
+            content += f"<p>{formatted}</p>"
+
 
         # Footer
         content += '<br><div style="text-align:center; margin-top:10px;"><strong>Have a productive day!</strong></div>'
@@ -422,8 +429,6 @@ import os
 import json
 import random
 import logging
-from openai import OpenAI
-
 USED_QUOTES_FILE = "used_quotes.json"
 
 # OpenRouter client
